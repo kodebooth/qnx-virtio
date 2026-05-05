@@ -1,0 +1,69 @@
+# Copyright (c) 2026 Abe Kohandel
+# SPDX-License-Identifier: MIT
+
+[image=0x40080000]
+[virtual=aarch64le,raw ] boot = {
+  startup-qemu-virt
+
+  PATH=/usr/bin
+  CONFIG_PATH=/usr/lib
+  LD_LIBRARY_PATH=/usr/lib:/usr/lib/pci
+  [+keeplinked uid=0 gid=0 perms=0700] procnto-smp-instr -mr -d 0777 -u 0777
+}
+
+[+script] startup-script = {
+  display_msg "Welcome to QNX OS 8.0 on aarch64le!"
+
+  slogger2
+
+  devc-serpl011 -e -F 0x9000000,33
+  waitfor /dev/ser1
+  reopen /dev/ser1
+
+  [+session] sh &
+
+  dev-virtio-gpio --virtio mem=0xa003e00,irq=79,qsize=64 &
+
+  display_msg "Startup complete"
+}
+
+# Libraries
+/usr/lib/ldqnx-64.so.2=ldqnx-64.so.2
+/usr/lib/libc.so.6=libc.so.6
+/usr/lib/libfsnotify.so.1=libfsnotify.so.1
+/usr/lib/libgcc_s.so.1=libgcc_s.so.1
+/usr/lib/libm.so.3=libm.so.3
+/usr/lib/libpci.so.3.0=libpci.so.3.0
+/usr/lib/libsecpol.so.1=libsecpol.so.1
+/usr/lib/libslog2.so.1=libslog2.so.1
+/usr/lib/libslog2parse.so.1=libslog2parse.so.1
+/usr/lib/libz.so.2=libz.so.2
+/usr/lib/pci/pci_bkwd_compat.so=pci/pci_bkwd_compat.so
+/usr/lib/pci/pci_cap-0x05.so=pci/pci_cap-0x05.so
+/usr/lib/pci/pci_cap-0x01.so=pci/pci_cap-0x01.so
+/usr/lib/pci/pci_cap-0x09-ffffffff.so=pci/pci_cap-0x09-ffffffff.so
+/usr/lib/pci/pci_cap-0x09-1af4ffff.so=pci/pci_cap-0x09-ffffffff.so
+/usr/lib/pci/pci_cap-0x10.so=pci/pci_cap-0x10.so
+/usr/lib/pci/pci_cap-0x11.so=pci/pci_cap-0x11.so
+/usr/lib/pci/pci_debug2.so=pci/pci_debug2.so
+/usr/lib/pci/pci_slog2.so=pci/pci_slog2.so
+/usr/lib/pci/pci_strings.so=pci/pci_strings.so
+
+# Binaries
+/usr/bin/devc-serpl011=devc-serpl011
+/usr/bin/pci-server=pci-server
+/usr/bin/pci-tool=pci-tool
+/usr/bin/pidin=pidin
+/usr/bin/rsrcdb_query=rsrcdb_query
+/usr/bin/sh=sh
+/usr/bin/shutdown=shutdown
+/usr/bin/slog2info=slog2info
+/usr/bin/slogger2=slogger2
+/usr/bin/toybox=toybox
+
+[type=link] /usr/bin/cat=toybox
+[type=link] /usr/bin/ls=toybox
+[type=link] /usr/bin/xxd=toybox
+
+# VirtIO
+/usr/bin/dev-virtio-gpio=dev-virtio-gpio

@@ -1,0 +1,22 @@
+{
+  "name": "qnx-virtio",
+  "image": "ghcr.io/kodebooth/qnx-virtio:latest",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": "true",
+      "username": "ubuntu",
+      "userUid": "1000",
+      "userGid": "1000",
+      "upgradePackages": "false"
+    },
+    "ghcr.io/devcontainers/features/copilot-cli:1": {}
+  },
+  "mounts": [
+    "source=${localEnv:HOME}/.config,target=/home/ubuntu/.config,type=bind,consistency=cached",
+    "source=${localEnv:SSH_AUTH_SOCK},target=/run/ssh-agent,type=bind,consistency=cached"
+  ],
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "/run/ssh-agent"
+  },
+  "remoteUser": "ubuntu"
+}

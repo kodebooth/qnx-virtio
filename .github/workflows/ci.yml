@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Abe Kohandel
+# SPDX-License-Identifier: MIT
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+name: 'ci'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64le]
+    container:
+      image: ghcr.io/kodebooth/qnx-virtio:latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+           submodules: recursive
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: third_party/vhost-device
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: pytest --arch ${{ matrix.arch }} -v -s
+

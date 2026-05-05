@@ -1,0 +1,47 @@
+{
+  "version": 10,
+  "configurePresets": [
+    {
+      "name": "x86_64",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/qnx_x86_64.cmake",
+      "binaryDir": "${sourceDir}/build/x86_64",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      },
+      "environment": {
+        "QNX_TARGET": "$penv{QNX_SDP_INSTALL_DIR}/target/qnx",
+        "QNX_HOST": "$penv{QNX_SDP_INSTALL_DIR}/host/linux/x86_64",
+        "PATH": "$penv{QNX_SDP_INSTALL_DIR}/host/linux/x86_64/usr/bin:$penv{PATH}"
+      }
+    },
+    {
+      "name": "aarch64le",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/qnx_aarch64.cmake",
+      "binaryDir": "${sourceDir}/build/aarch64le",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      },
+      "environment": {
+        "QNX_TARGET": "$penv{QNX_SDP_INSTALL_DIR}/target/qnx",
+        "QNX_HOST": "$penv{QNX_SDP_INSTALL_DIR}/host/linux/x86_64",
+        "PATH": "$penv{QNX_SDP_INSTALL_DIR}/host/linux/x86_64/usr/bin:$penv{PATH}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "x86_64",
+      "configurePreset": "x86_64"
+    },
+    {
+      "name": "aarch64le",
+      "configurePreset": "aarch64le"
+    }
+  ]
+}
