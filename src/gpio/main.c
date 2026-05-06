@@ -6,9 +6,9 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/procmgr.h>
-#include <syslog.h>
 
 #include "gpio.h"
+#include "logging.h"
 #include "options.h"
 #include "resmgr.h"
 #include <sys/mman.h>
@@ -26,18 +26,17 @@ int main(int argc, char **argv) {
 
   ThreadCtl(_NTO_TCTL_IO, 0);
 
-  openlog("dev-virtio-gpio", LOG_PID | LOG_CONS | LOG_PERROR, LOG_USER);
+  logging_init("dev-virtio-gpio", LOG_FLAG_NONE);
 
-  syslog(LOG_INFO,
-         "initializing virtio gpio device with idx=%u, mem=0x%lx, "
-         "irq=%u, qsize=%u",
-         virtio_args.idx, virtio_args.mem, virtio_args.irq, virtio_args.qsize);
+  log_info("initializing virtio gpio device with idx=%u, mem=0x%lx, "
+           "irq=%u, qsize=%u",
+           virtio_args.idx, virtio_args.mem, virtio_args.irq,
+           virtio_args.qsize);
 
   rc = virtio_gpio_init(virtio_args.idx, virtio_args.mem, virtio_args.irq,
                         virtio_args.qsize, &dev);
   if (rc != 0) {
-    syslog(LOG_ERR, "failed to initialize virtio gpio device: %s",
-           strerror(rc));
+    log_err("failed to initialize virtio gpio device: %s", strerror(rc));
     return -1;
   }
 

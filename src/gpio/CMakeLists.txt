@@ -9,8 +9,7 @@ add_executable(
   resmgr.c
 )
 
-target_link_libraries(dev-virtio-gpio PRIVATE virtio-pci)
-target_link_libraries(dev-virtio-gpio PRIVATE virtio-mmio)
+target_link_libraries(dev-virtio-gpio PRIVATE virtio-pci virtio-mmio logging)
 
 add_custom_command(
   TARGET dev-virtio-gpio POST_BUILD

@@ -9,5 +9,5 @@ add_library(virtio
     virtq.h
 )
 
-target_link_libraries(virtio PUBLIC fifo)
+target_link_libraries(virtio PUBLIC fifo logging)
 target_include_directories(virtio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
