@@ -26,6 +26,7 @@ struct gpio_iofunc_attr;
 #include "errno.h"
 #include "gpio.h"
 #include "resmgr.h"
+#include "logging.h"
 
 struct gpio_iofunc_attr {
   /* must be the first field */
@@ -125,16 +126,21 @@ int resmgr_run(struct virtio_gpio_device *dev, uint16_t index) {
 
   rc = virtio_gpio_num_gpios(dev, &ngpio);
   if (rc != EOK) {
+    log_err("failed to get gpio count: %s", strerror(rc));
     return rc;
   }
 
+  log_info("starting resource manager for %u gpio lines", ngpio);
+
   dpp = dispatch_create();
   if (dpp == NULL) {
+    log_err("failed to create dispatch: %s", strerror(errno));
     return errno;
   }
 
   resmgr = calloc(1, sizeof(struct gpio_resmgr));
   if (resmgr == NULL) {
+    log_err("failed to allocate resmgr structure: %s", strerror(errno));
     rc = errno;
     goto free_dpp;
   }
@@ -143,12 +149,14 @@ int resmgr_run(struct virtio_gpio_device *dev, uint16_t index) {
 
   attrs = calloc(ngpio, sizeof(struct gpio_iofunc_attr));
   if (attrs == NULL) {
+    log_err("failed to allocate gpio attributes: %s", strerror(errno));
     rc = errno;
     goto free_resmgr;
   }
 
   ids = calloc(ngpio, sizeof(int));
   if (ids == NULL) {
+    log_err("failed to allocate resource ids: %s", strerror(errno));
     rc = errno;
     goto free_attrs;
   }
@@ -170,13 +178,17 @@ int resmgr_run(struct virtio_gpio_device *dev, uint16_t index) {
         resmgr_attach(dpp, &resmgr->resmgr_attr, path, _FTYPE_ANY, 0,
                       &resmgr->connect_funcs, &resmgr->io_funcs, &attrs[n]);
     if (ids[n] == -1) {
+      log_err("failed to attach %s: %s", path, strerror(errno));
       rc = errno;
       goto detach;
     }
   }
 
+  log_info("resource manager ready, entering dispatch loop");
+
   ctp = dispatch_context_alloc(dpp);
   if (ctp == NULL) {
+    log_err("failed to allocate dispatch context: %s", strerror(errno));
     rc = errno;
     goto detach;
   }

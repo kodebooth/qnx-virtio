@@ -6,6 +6,7 @@
 #include "virtio.h"
 #include "virtio_mmio.h"
 #include "virtio_pci.h"
+#include "logging.h"
 #include <pthread.h>
 #include <semaphore.h>
 #include <stddef.h>
@@ -378,9 +379,13 @@ int virtio_gpio_init(size_t idx, uint64_t mem, uint32_t irq, uint16_t qsize,
     return EINVAL;
   }
 
+  log_debug("initializing virtio gpio device");
+
   pdev = calloc(1, sizeof(struct virtio_gpio_device));
   if (pdev == NULL) {
-    return ENOMEM;
+    rc = errno;
+    log_err("failed to allocate gpio device structure: %s", strerror(rc));
+    return rc;
   }
 
   pdev->idx = idx;
@@ -388,6 +393,7 @@ int virtio_gpio_init(size_t idx, uint64_t mem, uint32_t irq, uint16_t qsize,
   rc = mem ? virtio_mmio_init(&vdev, mem, VIRTIO_DT_GPIO, irq)
            : virtio_pci_init(&vdev, VIRTIO_DT_GPIO, idx, msix_vector_count);
   if (rc != EOK) {
+    log_err("failed to initialize virtio device: %s", strerror(rc));
     goto free_vdev;
   }
 
@@ -396,12 +402,14 @@ int virtio_gpio_init(size_t idx, uint64_t mem, uint32_t irq, uint16_t qsize,
   virtio_add_device_status(vdev, VIRTIO_DEVICE_STATUS_DRIVER);
 
   virtio_read_device_config(vdev, &pdev->config, sizeof(pdev->config), 0);
+  log_info("gpio device has %u lines", pdev->config.ngpio);
 
   virtio_add_device_status(vdev, VIRTIO_DEVICE_STATUS_FEATURES_OK);
 
   rc = virtio_create_queue(vdev, qindex, qsize, vdev->irq, virtq_callback,
                            &pdev->requestq);
   if (rc != EOK) {
+    log_err("failed to create request queue: %s", strerror(rc));
     goto free_vdev;
   }
 
@@ -411,6 +419,7 @@ int virtio_gpio_init(size_t idx, uint64_t mem, uint32_t irq, uint16_t qsize,
   pdev->dev = vdev;
   *dev = pdev;
 
+  log_info("virtio gpio device initialized successfully");
   return EOK;
 
 free_vdev:

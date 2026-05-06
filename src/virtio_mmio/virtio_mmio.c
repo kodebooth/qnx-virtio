@@ -4,6 +4,7 @@
  */
 #include "virtio_mmio.h"
 #include "virtio.h"
+#include "logging.h"
 #include <assert.h>
 #include <errno.h>
 #include <stdint.h>
@@ -586,16 +587,22 @@ int virtio_mmio_init(struct virtio_device **dev, uint64_t address,
 
   vdev->priv = mdev;
 
-  if (virtio_mmio_read32(mdev, VIRTIO_MMIO_MAGIC_VALUE) != 0x74726976) {
+  uint32_t magic = virtio_mmio_read32(mdev, VIRTIO_MMIO_MAGIC_VALUE);
+  if (magic != 0x74726976) {
+    log_err("invalid virtio magic value: expected 0x74726976, found 0x%x: %s",
+            magic, strerror(ENODEV));
     rc = ENODEV;
     goto free_mdev;
   }
 
   vdev->leagcy = virtio_mmio_read32(mdev, VIRTIO_MMIO_VERSION) ==
                  VIRTIO_MMIO_VERSION_LEGACY;
+  log_debug("virtio mmio version: %s", vdev->leagcy ? "legacy" : "modern");
 
   uint32_t device_id = virtio_mmio_read32(mdev, VIRTIO_MMIO_DEVICE_ID);
   if (device_id != type) {
+    log_err("device type mismatch: expected 0x%x, found 0x%x: %s",
+            type, device_id, strerror(ENODEV));
     rc = ENODEV;
     goto free_mdev;
   }
@@ -619,6 +626,7 @@ int virtio_mmio_init(struct virtio_device **dev, uint64_t address,
   vdev->ops.max_queue_size = virtio_mmio_max_queue_size;
   vdev->ops.virtq_callback = virtio_mmio_virtq_callback;
 
+  log_info("virtio mmio device initialized successfully");
   return EOK;
 
 free_mdev:
