@@ -5,6 +5,7 @@
 #include "virtio_pci.h"
 #include "virtio.h"
 #include "virtq.h"
+#include "logging.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -102,6 +103,11 @@ static int virtio_pci_virtq_callback(struct virtio_device *dev,
   } while (rc == EOK);
 
   return rc;
+}
+
+static inline void pci_bdf_format(pci_bdf_t bdf, char *buf, size_t size) {
+  snprintf(buf, size, "%02x:%02x.%x",
+           PCI_BUS(bdf), PCI_DEV(bdf), PCI_FUNC(bdf));
 }
 
 static inline pci_bdf_t virtio_pci_find(const unsigned index,
@@ -645,23 +651,31 @@ int virtio_pci_init(struct virtio_device **dev, uint16_t type, size_t index,
 
   pdev->bdf = virtio_pci_find(index, type);
   if (pdev->bdf == PCI_BDF_NONE) {
+    log_err("pci device not found: %s", strerror(ENODEV));
     rc = ENODEV;
     goto free_pdev;
   }
 
+  char bdf_str[16];
+  pci_bdf_format(pdev->bdf, bdf_str, sizeof(bdf_str));
+  log_debug("found pci device at %s", bdf_str);
+
   pdev->pci = pci_device_attach(pdev->bdf, pci_attachFlags_DEFAULT, &pci_err);
   if (pci_err != PCI_ERR_OK) {
+    log_err("failed to attach pci device: %s", strerror(pci_err));
     rc = pci_err;
     goto free_pdev;
   }
 
   rc = virtio_pci_find_caps(pdev);
   if (rc != 0) {
+    log_err("failed to find pci capabilities: %s", strerror(rc));
     goto detach_pci;
   }
 
   rc = virtio_pci_map_bars(pdev);
   if (rc != 0) {
+    log_err("failed to map pci bars: %s", strerror(rc));
     goto detach_pci;
   }
 
@@ -673,6 +687,7 @@ int virtio_pci_init(struct virtio_device **dev, uint16_t type, size_t index,
                      pdev->notify_cfg_cap.cap.offset;
 
   if (msix_vector_count > 0 && !pdev->msix) {
+    log_err("msix requested but not available: %s", strerror(EINVAL));
     rc = EINVAL;
     goto detach_pci;
   }
@@ -680,36 +695,44 @@ int virtio_pci_init(struct virtio_device **dev, uint16_t type, size_t index,
   if (pdev->msix) {
     virtio_pci_read_msix_vector_count(pdev, &pdev->msix_vector_count);
     if (msix_vector_count > pdev->msix_vector_count) {
+      log_err("requested msix vectors (%u) exceeds available (%u): %s",
+              msix_vector_count, pdev->msix_vector_count, strerror(EINVAL));
       rc = EINVAL;
       goto detach_pci;
     }
     pdev->msix_vector_count = msix_vector_count;
+    log_debug("configuring %u msix vectors", msix_vector_count);
 
     pci_err = cap_msix_set_nirq(pdev->pci, pdev->msix, pdev->msix_vector_count);
     if (pci_err != PCI_ERR_OK) {
+      log_err("failed to set msix nirq: %s", strerror(pci_err));
       rc = pci_err;
       goto detach_pci;
     }
     pci_err = cap_msix_set_irq_entry(pdev->pci, pdev->msix, 0, 0);
     if (pci_err != PCI_ERR_OK) {
+      log_err("failed to set msix irq entry: %s", strerror(pci_err));
       rc = pci_err;
       goto detach_pci;
     }
     pci_err = pci_device_cfg_cap_enable(pdev->pci, pci_reqType_e_MANDATORY,
                                         pdev->msix);
     if (pci_err != PCI_ERR_OK) {
+      log_err("failed to enable msix capability: %s", strerror(pci_err));
       rc = pci_err;
       goto detach_pci;
     }
     int irqcount = 1;
     pci_err = pci_device_read_irq(pdev->pci, &irqcount, &vdev->irq);
     if (pci_err != PCI_ERR_OK) {
+      log_err("failed to read irq: %s", strerror(pci_err));
       rc = pci_err;
       goto detach_pci;
     }
 
     pci_err = cap_msix_unmask_irq_entry(pdev->pci, pdev->msix, 0);
     if (pci_err != PCI_ERR_OK) {
+      log_err("failed to unmask msix irq: %s", strerror(pci_err));
       rc = pci_err;
       goto detach_pci;
     }
@@ -732,6 +755,7 @@ int virtio_pci_init(struct virtio_device **dev, uint16_t type, size_t index,
   vdev->ops.set_queue_size = virtio_pci_set_queue_size;
   vdev->ops.virtq_callback = virtio_pci_virtq_callback;
 
+  log_info("virtio pci device initialized successfully");
   return EOK;
 
 detach_pci:

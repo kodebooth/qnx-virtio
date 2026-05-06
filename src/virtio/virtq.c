@@ -13,6 +13,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "logging.h"
 #include "virtq.h"
 
 #include "fifo.h"
@@ -145,6 +146,7 @@ static int virtq_create_legacy(struct virtq *vq, uint16_t num) {
   const size_t pagesize = getpagesize();
   size_t avail_offset;
   size_t used_offset;
+  int rc;
 
   vq->legacy = true;
   vq->desc = mmap64(0, virtq_legacy_mem_size(num, pagesize),
@@ -152,7 +154,9 @@ static int virtq_create_legacy(struct virtq *vq, uint16_t num) {
                     MAP_SHARED | MAP_PHYS | MAP_ANON, NOFD, 0);
 
   if (vq->desc == MAP_FAILED) {
-    return ENOMEM;
+    rc = errno;
+    log_err("failed to map legacy virtqueue memory: %s", strerror(rc));
+    return rc;
   }
 
   avail_offset = virtq_desc_mem_size(num);
@@ -174,18 +178,23 @@ static int virtq_destroy_legacy(struct virtq *vq) {
 }
 
 static int virtq_create_modern(struct virtq *vq, uint16_t num) {
+  int rc;
   vq->legacy = false;
   vq->desc =
       mmap64(0, virtq_desc_mem_size(num), PROT_READ | PROT_WRITE | PROT_NOCACHE,
              MAP_SHARED | MAP_PHYS | MAP_ANON, NOFD, 0);
   if (vq->desc == MAP_FAILED) {
-    return ENOMEM;
+    rc = errno;
+    log_err("failed to map virtqueue descriptor table: %s", strerror(rc));
+    return rc;
   }
 
   vq->avail = mmap64(0, virtq_avail_mem_size(num),
                      PROT_READ | PROT_WRITE | PROT_NOCACHE,
                      MAP_SHARED | MAP_PHYS | MAP_ANON, NOFD, 0);
   if (vq->avail == MAP_FAILED) {
+    rc = errno;
+    log_err("failed to map virtqueue available ring: %s", strerror(rc));
     goto unmap_vq_desc;
   }
 
@@ -193,6 +202,8 @@ static int virtq_create_modern(struct virtq *vq, uint16_t num) {
       mmap64(0, virtq_used_mem_size(num), PROT_READ | PROT_WRITE | PROT_NOCACHE,
              MAP_SHARED | MAP_PHYS | MAP_ANON, NOFD, 0);
   if (vq->used == MAP_FAILED) {
+    rc = errno;
+    log_err("failed to map virtqueue used ring: %s", strerror(rc));
     goto unmap_vq_avail;
   }
 
@@ -234,10 +245,14 @@ int virtq_create(size_t size, bool legacy, struct virtq **vq) {
     return EINVAL;
   }
 
+  log_debug("creating virtqueue: size=%zu, legacy=%d", size, legacy);
+
   pvq = mmap64(0, sizeof(struct virtq), PROT_READ | PROT_WRITE | PROT_NOCACHE,
                MAP_SHARED | MAP_PHYS | MAP_ANON, NOFD, 0);
   if (pvq == MAP_FAILED) {
-    return ENOMEM;
+    rc = errno;
+    log_err("failed to allocate virtqueue structure: %s", strerror(rc));
+    return rc;
   }
 
   rc = legacy ? virtq_create_legacy(pvq, size) : virtq_create_modern(pvq, size);
@@ -248,28 +263,35 @@ int virtq_create(size_t size, bool legacy, struct virtq **vq) {
   rc = mem_offset64(pvq->desc, NOFD, virtq_desc_mem_size(pvq->num),
                     &pvq->desc_paddr, 0);
   if (rc != EOK) {
+    log_err("failed to get descriptor table physical address: %s",
+            strerror(rc));
     goto destroy;
   }
 
   rc = mem_offset64(pvq->avail, NOFD, virtq_avail_mem_size(pvq->num),
                     &pvq->avail_paddr, 0);
   if (rc != EOK) {
+    log_err("failed to get available ring physical address: %s", strerror(rc));
     goto destroy;
   }
 
   rc = mem_offset64(pvq->used, NOFD, virtq_used_mem_size(pvq->num),
                     &pvq->used_paddr, 0);
   if (rc != EOK) {
+    log_err("failed to get used ring physical address: %s", strerror(rc));
     goto destroy;
   }
 
   pvq->desc_extras = calloc(size, sizeof(struct desc_extras));
   if (pvq->desc_extras == NULL) {
+    rc = errno;
+    log_err("failed to allocate descriptor extras: %s", strerror(rc));
     goto destroy;
   }
 
   rc = fifo_create(size, sizeof(uint16_t), &pvq->free_descs);
   if (rc != EOK) {
+    log_err("failed to create free descriptor fifo: %s", strerror(rc));
     goto extras;
   }
 
@@ -281,6 +303,7 @@ int virtq_create(size_t size, bool legacy, struct virtq **vq) {
 
   rc = pthread_spin_init(&pvq->lock, PTHREAD_PROCESS_PRIVATE);
   if (rc != EOK) {
+    log_err("failed to initialize virtqueue lock: %s", strerror(rc));
     goto fifo;
   }
 
@@ -291,6 +314,7 @@ int virtq_create(size_t size, bool legacy, struct virtq **vq) {
 
   *vq = pvq;
 
+  log_debug("virtqueue created successfully");
   return EOK;
 
 fifo:

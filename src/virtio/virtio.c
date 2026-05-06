@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 #include "virtio.h"
+#include "logging.h"
 #include "virtq.h"
 #include <errno.h>
 #include <pthread.h>
@@ -10,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/neutrino.h>
-#include "logging.h"
 
 struct virtio_interrupt {
   struct virtio_device *dev;
@@ -31,9 +31,11 @@ void *virtio_ist(void *arg) {
 
   id = InterruptAttachThread(intr->irq, 0);
   if (id == -1) {
-    log_err("failed to attach interrupt: %s", strerror(errno));
+    log_err("failed to attach interrupt %d: %s", intr->irq, strerror(errno));
     return NULL;
   }
+
+  log_debug("interrupt service thread attached to irq %d", intr->irq);
 
   while (true) {
     InterruptUnmask(intr->irq, id);
@@ -53,7 +55,8 @@ int virtio_create_queue(struct virtio_device *dev, uint16_t index,
   int rc;
 
   if (dev == NULL || callback == NULL || vq == NULL) {
-    log_err("invalid argument: dev, callback, and vq must not be NULL");
+    log_err("invalid argument: dev, callback, and vq must not be NULL: %s",
+            strerror(EINVAL));
     return EINVAL;
   }
 
@@ -64,7 +67,7 @@ int virtio_create_queue(struct virtio_device *dev, uint16_t index,
 
   queue_size = size == 0 ? queue_size : min(size, queue_size);
   if (queue_size == 0) {
-    log_err("queue size must be greater than 0");
+    log_err("queue size must be greater than 0: %s", strerror(ENODEV));
     return ENODEV;
   }
 
@@ -98,12 +101,14 @@ int virtio_init(struct virtio_device **dev) {
 
   vdev = calloc(1, sizeof(struct virtio_device));
   if (vdev == NULL) {
-    return ENOMEM;
+    rc = errno;
+    log_err("failed to allocate virtio device structure: %s", strerror(rc));
+    return rc;
   }
 
   rc = pthread_spin_init(&vdev->lock, PTHREAD_PROCESS_PRIVATE);
   if (rc != EOK) {
-    free(vdev);
+    log_err("failed to initialize device lock: %s", strerror(rc));
   }
 
   *dev = vdev;
