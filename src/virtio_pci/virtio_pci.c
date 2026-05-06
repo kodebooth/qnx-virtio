@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <syslog.h>
 
 #define VIRTIO_PCI_VID ((uint16_t)0x1AF4)
 #define VIRTIO_PCI_DID(type) ((uint16_t)(0x1040 + (uint16_t)(type)))

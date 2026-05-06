@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/neutrino.h>
-#include <syslog.h>
+#include "logging.h"
 
 struct virtio_interrupt {
   struct virtio_device *dev;
@@ -31,7 +31,7 @@ void *virtio_ist(void *arg) {
 
   id = InterruptAttachThread(intr->irq, 0);
   if (id == -1) {
-    syslog(LOG_ERR, "failed to attach interrupt: %s", strerror(errno));
+    log_err("failed to attach interrupt: %s", strerror(errno));
     return NULL;
   }
 
@@ -53,26 +53,25 @@ int virtio_create_queue(struct virtio_device *dev, uint16_t index,
   int rc;
 
   if (dev == NULL || callback == NULL || vq == NULL) {
-    syslog(LOG_ERR,
-           "invalid argument: dev, callback, and vq must not be NULL\n");
+    log_err("invalid argument: dev, callback, and vq must not be NULL");
     return EINVAL;
   }
 
-  syslog(LOG_DEBUG, "creating queue %d with requested size %d", index, size);
+  log_debug("creating queue %d with requested size %d", index, size);
 
   virtio_max_queue_size(dev, index, &queue_size);
-  syslog(LOG_DEBUG, "max queue size for queue %d is %d", index, queue_size);
+  log_debug("max queue size for queue %d is %d", index, queue_size);
 
   queue_size = size == 0 ? queue_size : min(size, queue_size);
   if (queue_size == 0) {
-    syslog(LOG_ERR, "queue size must be greater than 0");
+    log_err("queue size must be greater than 0");
     return ENODEV;
   }
 
-  syslog(LOG_INFO, "creating queue %d with size %d", index, queue_size);
+  log_info("creating queue %d with size %d", index, queue_size);
   rc = virtq_create(queue_size, dev->leagcy, vq);
   if (rc != EOK) {
-    syslog(LOG_ERR, "failed to create virtqueue: %s", strerror(rc));
+    log_err("failed to create virtqueue: %s", strerror(rc));
     return rc;
   }
 

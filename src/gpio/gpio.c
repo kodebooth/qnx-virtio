@@ -11,7 +11,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include <syslog.h>
 
 #define VIRTIO_DT_GPIO 41
 
