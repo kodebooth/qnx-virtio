@@ -34,6 +34,7 @@ struct gpio_iofunc_attr {
 
   struct virtio_gpio_device *dev;
   uint16_t index;
+  uint8_t value;
 };
 
 struct gpio_resmgr {
@@ -76,7 +77,6 @@ static int resmgr_write(resmgr_context_t *ctp, io_write_t *msg,
 static int resmgr_read(resmgr_context_t *ctp, io_read_t *msg,
                        RESMGR_OCB_T *ocb) {
   int rc;
-  uint8_t value;
   size_t nleft;
   size_t nbytes;
   int nparts;
@@ -90,14 +90,15 @@ static int resmgr_read(resmgr_context_t *ctp, io_read_t *msg,
   nbytes = min(_IO_READ_GET_NBYTES(msg), nleft);
 
   if (nbytes > 0) {
-    rc = virtio_gpio_get_value(ocb->attr->dev, ocb->attr->index, &value);
+    rc = virtio_gpio_get_value(ocb->attr->dev, ocb->attr->index,
+                               &ocb->attr->value);
     if (rc != EOK) {
       return rc;
     }
 
-    value += '0';
+    ocb->attr->value += '0';
 
-    SETIOV(ctp->iov, &value, nbytes);
+    SETIOV(ctp->iov, &ocb->attr->value, nbytes);
     _IO_SET_READ_NBYTES(ctp, nbytes);
 
     ocb->offset += nbytes;
