@@ -185,7 +185,7 @@ static int virtq_callback(struct virtio_device *dev, struct virtq *vq) {
     rc = virtq_get_desc_chain(vq, &count, idxs);
   }
 
-  return 0;
+  return rc;
 }
 
 static int virtio_gpio_request(struct virtio_gpio_device *dev, uint16_t type,
