@@ -95,7 +95,7 @@ struct virtq {
   struct virtq_avail *avail;
   intptr_t avail_paddr;
 
-  struct virtq_used *used;
+  volatile struct virtq_used *used;
   intptr_t used_paddr;
   uint16_t last_seen_used;
 
@@ -230,7 +230,7 @@ static int virtq_destroy_modern(struct virtq *vq) {
     return errno;
   }
 
-  rc = munmap(vq->used, virtq_used_mem_size(vq->num));
+  rc = munmap((void *)vq->used, virtq_used_mem_size(vq->num));
   if (rc != EOK) {
     return errno;
   }
@@ -276,7 +276,7 @@ int virtq_create(size_t size, bool legacy, struct virtq **vq) {
     goto destroy;
   }
 
-  rc = mem_offset64(pvq->used, NOFD, virtq_used_mem_size(pvq->num),
+  rc = mem_offset64((void *)pvq->used, NOFD, virtq_used_mem_size(pvq->num),
                     &pvq->used_paddr, 0);
   if (rc != EOK) {
     log_err("failed to get used ring physical address: %s", strerror(rc));
