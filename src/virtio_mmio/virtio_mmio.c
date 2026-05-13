@@ -428,8 +428,13 @@ int virtio_mmio_read_device_config(struct virtio_device *const dev, void *dst,
                                    size_t len, size_t offset) {
   int rc;
   struct virtio_mmio_device *mdev;
+  size_t words;
 
   if (dev == NULL || dst == NULL) {
+    return EINVAL;
+  }
+
+  if ((len % sizeof(uint32_t)) || (offset % sizeof(uint32_t))) {
     return EINVAL;
   }
 
@@ -444,9 +449,11 @@ int virtio_mmio_read_device_config(struct virtio_device *const dev, void *dst,
     return rc;
   }
 
-  for (size_t i = 0; i < len; i += sizeof(uint32_t)) {
-    ((uint32_t *)dst)[i] =
-        virtio_mmio_read32(mdev, VIRTIO_MMIO_CONFIG + offset + i);
+  words = len / sizeof(uint32_t);
+
+  for (size_t word = 0; word < words; word++) {
+    ((uint32_t *)dst)[word] = virtio_mmio_read32(
+        mdev, VIRTIO_MMIO_CONFIG + offset + (word * sizeof(uint32_t)));
   }
 
   return pthread_spin_unlock(&dev->lock);
