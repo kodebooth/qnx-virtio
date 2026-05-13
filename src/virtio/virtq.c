@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -505,6 +506,8 @@ int virtq_put_desc_chain(struct virtq *const vq, size_t count, uint16_t *idx) {
   }
 
   vq->avail->ring[vq->avail->idx % vq->num] = idx[0];
+  // Ensure the ring update is seen by device before updating the index
+  __atomic_thread_fence(memory_order_seq_cst);
   vq->avail->idx++;
 
   return pthread_spin_unlock(&vq->lock);
