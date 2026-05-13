@@ -356,10 +356,7 @@ int virtq_destroy(struct virtq *const vq) {
     return rc;
   }
 
-  rc = munmap(vq, sizeof(struct virtq));
-  if (rc != EOK) {
-    return errno;
-  }
+  free(vq);
 
   return EOK;
 }
