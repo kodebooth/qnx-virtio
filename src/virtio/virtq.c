@@ -493,7 +493,7 @@ int virtq_put_desc_chain(struct virtq *const vq, size_t count, uint16_t *idx) {
 
   for (size_t n = 0; n < count; n++) {
     if (n > 0) {
-      vq->desc[idx[n - 1]].next |= idx[n];
+      vq->desc[idx[n - 1]].next = idx[n];
       vq->desc[idx[n - 1]].flags |= VIRTQ_DESC_F_NEXT;
     }
   }
