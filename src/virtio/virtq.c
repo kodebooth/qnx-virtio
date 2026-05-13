@@ -248,9 +248,8 @@ int virtq_create(size_t size, bool legacy, struct virtq **vq) {
 
   log_debug("creating virtqueue: size=%zu, legacy=%d", size, legacy);
 
-  pvq = mmap64(0, sizeof(struct virtq), PROT_READ | PROT_WRITE | PROT_NOCACHE,
-               MAP_SHARED | MAP_PHYS | MAP_ANON, NOFD, 0);
-  if (pvq == MAP_FAILED) {
+  pvq = calloc(1, sizeof(struct virtq));
+  if (pvq == NULL) {
     rc = errno;
     log_err("failed to allocate virtqueue structure: %s", strerror(rc));
     return rc;
@@ -258,7 +257,7 @@ int virtq_create(size_t size, bool legacy, struct virtq **vq) {
 
   rc = legacy ? virtq_create_legacy(pvq, size) : virtq_create_modern(pvq, size);
   if (rc != EOK) {
-    goto unmap_vq;
+    goto free_vq;
   }
 
   rc = mem_offset64(pvq->desc, NOFD, virtq_desc_mem_size(pvq->num),
@@ -327,8 +326,8 @@ extras:
 destroy:
   legacy ? virtq_destroy_legacy(pvq) : virtq_destroy_modern(pvq);
 
-unmap_vq:
-  munmap(pvq, sizeof(struct virtq));
+free_vq:
+  free(pvq);
 
   return rc;
 }
