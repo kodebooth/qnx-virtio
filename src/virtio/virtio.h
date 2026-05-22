@@ -40,6 +40,12 @@
 /** @brief Driver has encountered an error and given up on the device */
 #define VIRTIO_DEVICE_STATUS_FAILED (1U << 7)
 
+/** @brief default device reset timeout */
+#define VIRTIO_CONFIG_DEVICE_RESET_TIMEOUT_MS 500U
+
+/** @brief default device reset poll interval */
+#define VIRTIO_CONFIG_DEVICE_RESET_POLL_INTERVAL_MS 10U
+
 /** @brief Forward declaration of VirtIO device structure */
 struct virtio_device;
 
@@ -198,11 +204,21 @@ struct virtio_device {
   /** @brief Transport-specific operations */
   struct virtio_ops ops;
 
-  /** @brief Private data for transport-specific use */
-  void *priv;
+  /** @brief device reset timeout */
+  unsigned int device_reset_timeout_ms;
+
+  /** @brief device reset poll interval
+   *
+   * This is the interval at which the device status is polled to determine if
+   * a reset was successful.
+   */
+  unsigned int device_reset_poll_interval_ms;
 
   /** @brief Interrupt number */
   int irq;
+
+  /** @brief Private data for transport-specific use */
+  void *priv;
 };
 
 /**
@@ -281,14 +297,10 @@ static inline int virtio_read_device_config(struct virtio_device *dev,
 /**
  * @brief Reset the VirtIO device
  *
- * @todo (#1) device reset improvements
- *
  * @param dev VirtIO device instance
  * @return 0 on success, negative error code on failure
  */
-static inline int virtio_reset_device(struct virtio_device *dev) {
-  return dev->ops.reset_device(dev);
-}
+int virtio_reset_device(struct virtio_device *dev);
 
 /**
  * @brief Select a queue for subsequent operations

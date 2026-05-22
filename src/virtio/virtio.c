@@ -45,6 +45,39 @@ void *virtio_ist(void *arg) {
   }
 }
 
+int virtio_reset_device(struct virtio_device *dev) {
+  int rc;
+  unsigned int remaining_timeout_ms;
+  unsigned int remaining_poll_interval_ms;
+  uint8_t device_status;
+
+  if ((rc = dev->ops.reset_device(dev)) != EOK) {
+    return rc;
+  }
+
+  remaining_timeout_ms = dev->device_reset_timeout_ms;
+
+  if ((rc = virtio_get_device_status(dev, &device_status)) != EOK) {
+    return rc;
+  }
+
+  while (device_status != 0 && remaining_timeout_ms > 0) {
+    remaining_poll_interval_ms = dev->device_reset_poll_interval_ms;
+    while (remaining_poll_interval_ms > 0) {
+      remaining_poll_interval_ms = delay(remaining_poll_interval_ms);
+    }
+
+    remaining_timeout_ms -=
+        min(remaining_timeout_ms, dev->device_reset_poll_interval_ms);
+
+    if ((rc = virtio_get_device_status(dev, &device_status)) != EOK) {
+      return rc;
+    }
+  }
+
+  return device_status == 0 ? EOK : ETIMEDOUT;
+}
+
 int virtio_create_queue(struct virtio_device *dev, uint16_t index,
                         uint16_t size, int irq,
                         int (*callback)(struct virtio_device *dev,
@@ -110,6 +143,10 @@ int virtio_init(struct virtio_device **dev) {
   if (rc != EOK) {
     log_err("failed to initialize device lock: %s", strerror(rc));
   }
+
+  vdev->device_reset_timeout_ms = VIRTIO_CONFIG_DEVICE_RESET_TIMEOUT_MS;
+  vdev->device_reset_poll_interval_ms =
+      VIRTIO_CONFIG_DEVICE_RESET_POLL_INTERVAL_MS;
 
   *dev = vdev;
   return rc;
