@@ -11,7 +11,7 @@
 struct gpio_iofunc_attr;
 #define IOFUNC_ATTR_T struct gpio_iofunc_attr
 
-/* clang-format off */ 
+/* clang-format off */
 // iofun.h must come before resmgr.h and both must come before all other sys includes
 // to correctly define IOFUNC_ATTR_T and RESMGR_OCB_ATTR
 #include <sys/iofunc.h>
@@ -45,6 +45,14 @@ struct gpio_resmgr {
   int *ids;
 };
 
+/**
+ * @brief Handle write requests to GPIO device
+ *
+ * @param[in] ctp Resource manager context
+ * @param[in] msg Write message structure
+ * @param[in] ocb Open control block
+ * @return EOK on success, error code on failure
+ */
 static int resmgr_write(resmgr_context_t *ctp, io_write_t *msg,
                         RESMGR_OCB_T *ocb) {
   int rc;
@@ -74,6 +82,14 @@ static int resmgr_write(resmgr_context_t *ctp, io_write_t *msg,
   return rc;
 }
 
+/**
+ * @brief Handle read requests from GPIO device
+ *
+ * @param[in] ctp Resource manager context
+ * @param[in] msg Read message structure
+ * @param[in] ocb Open control block
+ * @return EOK on success, error code on failure
+ */
 static int resmgr_read(resmgr_context_t *ctp, io_read_t *msg,
                        RESMGR_OCB_T *ocb) {
   int rc;

@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: MIT
  */
 #include "virtio_pci.h"
+#include "logging.h"
 #include "virtio.h"
 #include "virtq.h"
-#include "logging.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -106,8 +106,8 @@ static int virtio_pci_virtq_callback(struct virtio_device *dev,
 }
 
 static inline void pci_bdf_format(pci_bdf_t bdf, char *buf, size_t size) {
-  snprintf(buf, size, "%02x:%02x.%x",
-           PCI_BUS(bdf), PCI_DEV(bdf), PCI_FUNC(bdf));
+  snprintf(buf, size, "%02x:%02x.%x", PCI_BUS(bdf), PCI_DEV(bdf),
+           PCI_FUNC(bdf));
 }
 
 static inline pci_bdf_t virtio_pci_find(const unsigned index,
@@ -133,8 +133,15 @@ static inline int virtio_pci_read_pci_cap(pci_cap_t cap,
                              (uint8_t *)&virtio_cap->cfg_type);
 }
 
-int virtio_pci_get_device_status(struct virtio_device *const dev,
-                                 uint8_t *status) {
+/**
+ * @brief Get the device status from a VirtIO device
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] status Pointer to store the device status
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_get_device_status(struct virtio_device *const dev,
+                                        uint8_t *status) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL || status == NULL) {
@@ -150,8 +157,15 @@ int virtio_pci_get_device_status(struct virtio_device *const dev,
   return EOK;
 }
 
-int virtio_pci_set_device_status(struct virtio_device *const dev,
-                                 uint8_t status) {
+/**
+ * @brief Set the device status of a VirtIO device
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] status Device status to set
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_set_device_status(struct virtio_device *const dev,
+                                        uint8_t status) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL) {
@@ -169,36 +183,15 @@ int virtio_pci_set_device_status(struct virtio_device *const dev,
   return EOK;
 }
 
-int virtio_pci_add_device_status(struct virtio_device *const dev,
-                                 uint8_t status) {
-  int rc;
-  uint8_t current_status;
-
-  if (dev == NULL) {
-    return EINVAL;
-  }
-
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_pci_get_device_status(dev, &current_status);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
-  rc = virtio_pci_set_device_status(dev, current_status | status);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
-}
-
-int virtio_pci_reset_device(struct virtio_device *dev) {
+/**
+ * @brief Reset a VirtIO device
+ *
+ * Sets the device status to 0, initiating a device reset.
+ *
+ * @param[in] dev VirtIO device
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_reset_device(struct virtio_device *dev) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL) {
@@ -215,7 +208,14 @@ int virtio_pci_reset_device(struct virtio_device *dev) {
   return EOK;
 }
 
-int virtio_pci_select_queue(struct virtio_device *dev, uint16_t index) {
+/**
+ * @brief Select a virtqueue for subsequent operations
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] index Queue index to select
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_select_queue(struct virtio_device *dev, uint16_t index) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL) {
@@ -232,8 +232,14 @@ int virtio_pci_select_queue(struct virtio_device *dev, uint16_t index) {
   return EOK;
 }
 
-int virtio_pci_notify_queue(struct virtio_device *dev, uint16_t index) {
-  int rc;
+/**
+ * @brief Notify the device about available buffers in a queue
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] index Queue index to notify
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_notify_queue(struct virtio_device *dev, uint16_t index) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL) {
@@ -246,29 +252,22 @@ int virtio_pci_notify_queue(struct virtio_device *dev, uint16_t index) {
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_pci_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
   // TODO: (#4) queue notification
   ((uint8_t *)pdev->notify_cfg)[pdev->common_cfg->queue_notify_off *
                                 pdev->notify_cfg_cap.notify_off_multiplier] =
       index;
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_pci_enable_queue(struct virtio_device *dev, uint16_t index,
-                            bool enable) {
-  int rc;
+/**
+ * @brief Enable or disable a virtqueue
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] enable true to enable, false to disable
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_enable_queue(struct virtio_device *dev, bool enable) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL) {
@@ -280,25 +279,22 @@ int virtio_pci_enable_queue(struct virtio_device *dev, uint16_t index,
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_pci_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
+  // TODO: (#3) add support for MSI-X vectors per queue
+  pdev->common_cfg->queue_msix_vector = 0;
   pdev->common_cfg->queue_enable = enable ? 1 : 0;
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_pci_reset_queue(struct virtio_device *dev, uint16_t index) {
-  int rc;
+/**
+ * @brief Reset a virtqueue
+ *
+ * Initiates a queue reset and waits for it to complete.
+ *
+ * @param[in] dev VirtIO device
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_reset_queue(struct virtio_device *dev) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL) {
@@ -309,16 +305,6 @@ int virtio_pci_reset_queue(struct virtio_device *dev, uint16_t index) {
 
   if (pdev == NULL || pdev->common_cfg == NULL) {
     return EINVAL;
-  }
-
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_pci_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
   }
 
   pdev->common_cfg->queue_reset = true;
@@ -326,14 +312,17 @@ int virtio_pci_reset_queue(struct virtio_device *dev, uint16_t index) {
     /* wait for reset to complete */
   }
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_pci_queue_size(struct virtio_device *dev, uint16_t index,
-                          uint16_t *size) {
-  int rc;
+/**
+ * @brief Get the size of a virtqueue
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] size Pointer to store the queue size
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_queue_size(struct virtio_device *dev, uint16_t *size) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL || size == NULL) {
@@ -345,26 +334,19 @@ int virtio_pci_queue_size(struct virtio_device *dev, uint16_t index,
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_pci_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
   *size = pdev->common_cfg->queue_size;
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_pci_set_queue_size(struct virtio_device *dev, uint16_t index,
-                              uint16_t size) {
-  int rc;
+/**
+ * @brief Set the size of a virtqueue
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] size Queue size to set
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_set_queue_size(struct virtio_device *dev, uint16_t size) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL) {
@@ -376,25 +358,21 @@ int virtio_pci_set_queue_size(struct virtio_device *dev, uint16_t index,
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_pci_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
   pdev->common_cfg->queue_size = size;
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_pci_read_device_features(struct virtio_device *dev,
-                                    uint32_t *features, size_t len) {
+/**
+ * @brief Read device feature bits
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] features Array to store feature bits
+ * @param[in] len Number of 32-bit feature words to read
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_read_device_features(struct virtio_device *dev,
+                                           uint32_t *features, size_t len) {
   uint32_t select;
   struct virtio_pci_device *pdev;
 
@@ -415,9 +393,16 @@ int virtio_pci_read_device_features(struct virtio_device *dev,
   return EOK;
 }
 
-int virtio_pci_write_driver_features(struct virtio_device *dev,
-                                     const uint32_t *features, size_t len) {
-  int rc;
+/**
+ * @brief Write driver feature bits
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] features Array of feature bits to write
+ * @param[in] len Number of 32-bit feature words to write
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_write_driver_features(struct virtio_device *dev,
+                                            const uint32_t *features, size_t len) {
   uint32_t select;
   struct virtio_pci_device *pdev;
 
@@ -431,22 +416,25 @@ int virtio_pci_write_driver_features(struct virtio_device *dev,
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
   for (select = 0; select < len; select++) {
     pdev->common_cfg->driver_feature_select = select;
     pdev->common_cfg->driver_feature = features[select];
   }
 
-  return pthread_spin_unlock(&dev->lock);
+  return EOK;
 }
 
-int virtio_pci_read_device_config(struct virtio_device *dev, void *dst,
-                                  size_t len, size_t offset) {
-  int rc;
+/**
+ * @brief Read device-specific configuration space
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] dst Destination buffer
+ * @param[in] len Number of bytes to read
+ * @param[in] offset Offset within device configuration space
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_read_device_config(struct virtio_device *dev, void *dst,
+                                         size_t len, size_t offset) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL || dst == NULL) {
@@ -455,20 +443,22 @@ int virtio_pci_read_device_config(struct virtio_device *dev, void *dst,
 
   pdev = dev->priv;
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
   for (size_t i = 0; i < len; i += sizeof(uint32_t)) {
     ((uint32_t *)dst)[i] = ((uint32_t *)pdev->device_cfg)[offset + i];
   }
 
-  return pthread_spin_unlock(&dev->lock);
+  return EOK;
 }
 
-int virtio_pci_read_msix_vector_count(struct virtio_pci_device *dev,
-                                      uint16_t *count) {
+/**
+ * @brief Read the MSI-X vector count for a PCI device
+ *
+ * @param[in] dev VirtIO PCI device
+ * @param[out] count Pointer to store the vector count
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_pci_read_msix_vector_count(struct virtio_pci_device *dev,
+                                             uint16_t *count) {
   if (dev == NULL || count == NULL) {
     return EINVAL;
   }
@@ -482,67 +472,34 @@ int virtio_pci_read_msix_vector_count(struct virtio_pci_device *dev,
   return EOK;
 }
 
-int virtio_pci_create_queue(struct virtio_device *dev, struct virtq *vq,
-                            const uint16_t index) {
-  uint16_t num;
+/**
+ * @brief Set the physical address of a virtqueue for PCI device
+ *
+ * Configures the descriptor, available, and used ring addresses in the
+ * PCI common configuration structure for the specified virtqueue.
+ *
+ * @param dev VirtIO PCI device instance
+ * @param vq Virtual queue to configure
+ * @return EOK on success, error code on failure
+ */
+static int virtio_pci_set_queue_addr(struct virtio_device *const dev,
+                                     struct virtq *vq) {
   int rc;
   struct virtio_pci_device *pdev = dev->priv;
 
-  if (dev == NULL || vq == NULL) {
-    return EINVAL;
-  }
-
-  rc = virtq_size(vq, &num);
-  if (rc != EOK) {
+  if ((rc = virtq_desc_paddr(vq, (intptr_t *)&pdev->common_cfg->queue_desc)) !=
+      EOK) {
     return rc;
   }
-
-  pdev = dev->priv;
-  if (pdev == NULL || pdev->common_cfg == NULL) {
-    return EINVAL;
-  }
-
-  rc = virtio_pci_reset_queue(dev, index);
-  if (rc != EOK) {
+  if ((rc = virtq_avail_paddr(
+           vq, (intptr_t *)&pdev->common_cfg->queue_driver)) != EOK) {
     return rc;
   }
-
-  rc = virtio_pci_set_queue_size(dev, index, num);
-  if (rc != EOK) {
+  if ((rc = virtq_used_paddr(
+           vq, (intptr_t *)&pdev->common_cfg->queue_device)) != EOK) {
     return rc;
   }
-
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_pci_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
-  rc = virtq_desc_paddr(vq, (intptr_t *)&pdev->common_cfg->queue_desc);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
-  rc = virtq_avail_paddr(vq, (intptr_t *)&pdev->common_cfg->queue_driver);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
-  rc = virtq_used_paddr(vq, (intptr_t *)&pdev->common_cfg->queue_device);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
-  // TODO: (#3) add support for MSI-X vectors per queue
-  pdev->common_cfg->queue_msix_vector = 0;
-
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
 static int virtio_pci_find_caps(struct virtio_pci_device *dev) {
@@ -626,19 +583,11 @@ static int virtio_pci_map_bars(struct virtio_pci_device *dev) {
   return EOK;
 }
 
-int virtio_pci_init(struct virtio_device **dev, uint16_t type, size_t index,
+int virtio_pci_init(struct virtio_device *dev, uint16_t type, size_t index,
                     uint16_t msix_vector_count) {
   pci_err_t pci_err;
   int rc;
   struct virtio_pci_device *pdev;
-  struct virtio_device *vdev;
-
-  rc = virtio_init(dev);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  vdev = *dev;
 
   pdev = calloc(1, sizeof(struct virtio_pci_device));
   if (pdev == NULL) {
@@ -646,8 +595,8 @@ int virtio_pci_init(struct virtio_device **dev, uint16_t type, size_t index,
     goto free_vdev;
   }
 
-  vdev->priv = pdev;
-  vdev->leagcy = false;
+  dev->priv = pdev;
+  dev->leagcy = false;
 
   pdev->bdf = virtio_pci_find(index, type);
   if (pdev->bdf == PCI_BDF_NONE) {
@@ -723,7 +672,7 @@ int virtio_pci_init(struct virtio_device **dev, uint16_t type, size_t index,
       goto detach_pci;
     }
     int irqcount = 1;
-    pci_err = pci_device_read_irq(pdev->pci, &irqcount, &vdev->irq);
+    pci_err = pci_device_read_irq(pdev->pci, &irqcount, &dev->irq);
     if (pci_err != PCI_ERR_OK) {
       log_err("failed to read irq: %s", strerror(pci_err));
       rc = pci_err;
@@ -738,22 +687,20 @@ int virtio_pci_init(struct virtio_device **dev, uint16_t type, size_t index,
     }
   }
 
-  vdev->ops.read_device_features = virtio_pci_read_device_features;
-  vdev->ops.write_driver_features = virtio_pci_write_driver_features;
-  vdev->ops.set_device_status = virtio_pci_set_device_status;
-  vdev->ops.add_device_status = virtio_pci_add_device_status;
-  vdev->ops.reset_device = virtio_pci_reset_device;
-  vdev->ops.get_device_status = virtio_pci_get_device_status;
-  vdev->ops.read_device_config = virtio_pci_read_device_config;
-  vdev->ops.create_queue = virtio_pci_create_queue;
-  vdev->ops.select_queue = virtio_pci_select_queue;
-  vdev->ops.notify_queue = virtio_pci_notify_queue;
-  vdev->ops.enable_queue = virtio_pci_enable_queue;
-  vdev->ops.reset_queue = virtio_pci_reset_queue;
-  vdev->ops.max_queue_size = virtio_pci_queue_size;
-  vdev->ops.get_queue_size = virtio_pci_queue_size;
-  vdev->ops.set_queue_size = virtio_pci_set_queue_size;
-  vdev->ops.virtq_callback = virtio_pci_virtq_callback;
+  dev->ops.read_device_features = virtio_pci_read_device_features;
+  dev->ops.write_driver_features = virtio_pci_write_driver_features;
+  dev->ops.set_device_status = virtio_pci_set_device_status;
+  dev->ops.reset_device = virtio_pci_reset_device;
+  dev->ops.get_device_status = virtio_pci_get_device_status;
+  dev->ops.read_device_config = virtio_pci_read_device_config;
+  dev->ops.set_queue_addr = virtio_pci_set_queue_addr;
+  dev->ops.select_queue = virtio_pci_select_queue;
+  dev->ops.notify_queue = virtio_pci_notify_queue;
+  dev->ops.enable_queue = virtio_pci_enable_queue;
+  dev->ops.reset_queue = virtio_pci_reset_queue;
+  dev->ops.max_queue_size = virtio_pci_queue_size;
+  dev->ops.set_queue_size = virtio_pci_set_queue_size;
+  dev->ops.virtq_callback = virtio_pci_virtq_callback;
 
   log_info("virtio pci device initialized successfully");
   return EOK;
@@ -763,7 +710,7 @@ detach_pci:
 free_pdev:
   free(pdev);
 free_vdev:
-  virtio_destroy(vdev);
+  virtio_destroy(dev);
 
   return rc;
 }

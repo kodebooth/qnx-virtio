@@ -78,6 +78,158 @@ int virtio_reset_device(struct virtio_device *dev) {
   return device_status == 0 ? EOK : ETIMEDOUT;
 }
 
+int virtio_add_device_status(struct virtio_device *dev, uint8_t status) {
+  int rc;
+  uint8_t current_status;
+
+  if (dev == NULL) {
+    return EINVAL;
+  }
+
+  rc = pthread_spin_lock(&dev->lock);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = virtio_get_device_status(dev, &current_status);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+  rc = virtio_set_device_status(dev, current_status | status);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+unlock:
+  pthread_spin_unlock(&dev->lock);
+  return rc;
+}
+
+int virtio_notify_queue(struct virtio_device *dev, uint16_t index) {
+  int rc;
+
+  if (dev == NULL) {
+    return EINVAL;
+  }
+
+  rc = pthread_spin_lock(&dev->lock);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = virtio_select_queue(dev, index);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+  rc = dev->ops.notify_queue(dev, index);
+
+unlock:
+  pthread_spin_unlock(&dev->lock);
+  return rc;
+}
+
+int virtio_enable_queue(struct virtio_device *dev, uint16_t index,
+                        bool enable) {
+  int rc;
+
+  if (dev == NULL) {
+    return EINVAL;
+  }
+
+  rc = pthread_spin_lock(&dev->lock);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = virtio_select_queue(dev, index);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+  rc = dev->ops.enable_queue(dev, enable);
+
+unlock:
+  pthread_spin_unlock(&dev->lock);
+  return rc;
+}
+
+int virtio_reset_queue(struct virtio_device *dev, uint16_t index) {
+  int rc;
+
+  if (dev == NULL) {
+    return EINVAL;
+  }
+
+  rc = pthread_spin_lock(&dev->lock);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = virtio_select_queue(dev, index);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+  rc = dev->ops.reset_queue(dev);
+
+unlock:
+  pthread_spin_unlock(&dev->lock);
+  return rc;
+}
+
+int virtio_max_queue_size(struct virtio_device *dev, uint16_t index,
+                          uint16_t *size) {
+  int rc;
+
+  if (dev == NULL || size == NULL) {
+    return EINVAL;
+  }
+
+  rc = pthread_spin_lock(&dev->lock);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = virtio_select_queue(dev, index);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+  rc = dev->ops.max_queue_size(dev, size);
+
+unlock:
+  pthread_spin_unlock(&dev->lock);
+  return rc;
+}
+
+int virtio_set_queue_size(struct virtio_device *dev, uint16_t index,
+                          uint16_t size) {
+
+  int rc;
+
+  if (dev == NULL) {
+    return EINVAL;
+  }
+
+  rc = pthread_spin_lock(&dev->lock);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = virtio_select_queue(dev, index);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+  rc = dev->ops.set_queue_size(dev, size);
+
+unlock:
+  pthread_spin_unlock(&dev->lock);
+  return rc;
+}
+
 int virtio_create_queue(struct virtio_device *dev, uint16_t index,
                         uint16_t size, int irq,
                         int (*callback)(struct virtio_device *dev,
@@ -111,7 +263,22 @@ int virtio_create_queue(struct virtio_device *dev, uint16_t index,
     return rc;
   }
 
-  dev->ops.create_queue(dev, *vq, index);
+  log_info("resetting queue %d", index);
+  if ((rc = virtio_reset_queue(dev, index)) != EOK) {
+    log_err("failed to reset queue %d: %s", index, strerror(rc));
+    return rc;
+  }
+
+  log_info("setting queue %d size to %u", index, size);
+  if ((rc = virtio_set_queue_size(dev, index, size)) != EOK) {
+    log_err("failed to set queue %d size to %u: %s", index, size, strerror(rc));
+    return rc;
+  }
+  log_info("setting queue %d address", index);
+  if ((rc = virtio_set_queue_addr(dev, *vq)) != EOK) {
+    log_err("failed to set queue %d address: %s", index, strerror(rc));
+    return rc;
+  }
 
   intr = calloc(1, sizeof(struct virtio_interrupt));
   intr->dev = dev;

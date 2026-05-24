@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 #include "virtio_mmio.h"
-#include "virtio.h"
 #include "logging.h"
+#include "virtio.h"
 #include <assert.h>
 #include <errno.h>
 #include <stdint.h>
@@ -79,8 +79,16 @@ static inline uint32_t virtio_mmio_read32(struct virtio_mmio_device *dev,
   return *addr;
 }
 
-int virtio_mmio_read_device_features(struct virtio_device *const dev,
-                                     uint32_t *features, size_t count) {
+/**
+ * @brief Read device feature bits
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] features Array to store feature bits
+ * @param[in] count Number of 32-bit feature words to read
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_read_device_features(struct virtio_device *const dev,
+                                            uint32_t *features, size_t count) {
   uint32_t select;
   struct virtio_mmio_device *mdev;
 
@@ -101,8 +109,16 @@ int virtio_mmio_read_device_features(struct virtio_device *const dev,
   return EOK;
 }
 
-int virtio_mmio_write_driver_features(struct virtio_device *const dev,
-                                      const uint32_t *features, size_t count) {
+/**
+ * @brief Write driver feature bits
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] features Array of feature bits to write
+ * @param[in] count Number of 32-bit feature words to write
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_write_driver_features(struct virtio_device *const dev,
+                                             const uint32_t *features, size_t count) {
   uint32_t select;
   struct virtio_mmio_device *mdev;
 
@@ -123,7 +139,14 @@ int virtio_mmio_write_driver_features(struct virtio_device *const dev,
   return EOK;
 }
 
-int virtio_mmio_get_device_status(struct virtio_device *dev, uint8_t *status) {
+/**
+ * @brief Get the device status
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] status Pointer to store the device status
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_get_device_status(struct virtio_device *dev, uint8_t *status) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL || status == NULL) {
@@ -141,8 +164,15 @@ int virtio_mmio_get_device_status(struct virtio_device *dev, uint8_t *status) {
   return EOK;
 }
 
-int virtio_mmio_set_device_status(struct virtio_device *const dev,
-                                  uint8_t status) {
+/**
+ * @brief Set the device status
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] status Device status to set
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_set_device_status(struct virtio_device *const dev,
+                                         uint8_t status) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -160,36 +190,15 @@ int virtio_mmio_set_device_status(struct virtio_device *const dev,
   return EOK;
 }
 
-int virtio_mmio_add_device_status(struct virtio_device *const dev,
-                                  uint8_t status) {
-  int rc;
-  uint8_t current_status;
-
-  if (dev == NULL) {
-    return EINVAL;
-  }
-
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_mmio_get_device_status(dev, &current_status);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
-  rc = virtio_mmio_set_device_status(dev, current_status | status);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
-}
-
-int virtio_mmio_reset_device(struct virtio_device *const dev) {
+/**
+ * @brief Reset a VirtIO device
+ *
+ * Sets the device status to 0, initiating a device reset.
+ *
+ * @param[in] dev VirtIO device
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_reset_device(struct virtio_device *const dev) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -207,7 +216,14 @@ int virtio_mmio_reset_device(struct virtio_device *const dev) {
   return EOK;
 }
 
-int virtio_mmio_select_queue(struct virtio_device *const dev, uint16_t index) {
+/**
+ * @brief Select a virtqueue for subsequent operations
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] index Queue index to select
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_select_queue(struct virtio_device *const dev, uint16_t index) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -225,8 +241,14 @@ int virtio_mmio_select_queue(struct virtio_device *const dev, uint16_t index) {
   return EOK;
 }
 
-int virtio_mmio_notify_queue(struct virtio_device *const dev, uint16_t index) {
-  int rc;
+/**
+ * @brief Notify the device about available buffers in a queue
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] index Queue index to notify
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_notify_queue(struct virtio_device *const dev, uint16_t index) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -237,28 +259,21 @@ int virtio_mmio_notify_queue(struct virtio_device *const dev, uint16_t index) {
 
   if (mdev == NULL) {
     return EINVAL;
-  }
-
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_mmio_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
   }
 
   virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_NOTIFY, index);
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_mmio_enable_queue(struct virtio_device *const dev, uint16_t index,
-                             bool enable) {
-  int rc;
+/**
+ * @brief Enable or disable a virtqueue
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] enable true to enable, false to disable
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_enable_queue(struct virtio_device *const dev, bool enable) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -269,27 +284,22 @@ int virtio_mmio_enable_queue(struct virtio_device *const dev, uint16_t index,
 
   if (mdev == NULL) {
     return EINVAL;
-  }
-
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_mmio_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
   }
 
   virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_READY, enable ? 1 : 0);
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_mmio_reset_queue(struct virtio_device *const dev, uint16_t index) {
-  int rc;
+/**
+ * @brief Reset a virtqueue
+ *
+ * Initiates a queue reset and waits for it to complete.
+ *
+ * @param[in] dev VirtIO device
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_reset_queue(struct virtio_device *const dev) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -300,16 +310,6 @@ int virtio_mmio_reset_queue(struct virtio_device *const dev, uint16_t index) {
 
   if (mdev == NULL) {
     return EINVAL;
-  }
-
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_mmio_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
   }
 
   virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_RESET, 1);
@@ -317,14 +317,18 @@ int virtio_mmio_reset_queue(struct virtio_device *const dev, uint16_t index) {
     /* wait for reset to complete */
   }
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_mmio_max_queue_size(struct virtio_device *const dev, uint16_t index,
-                               uint16_t *size) {
-  int rc;
+/**
+ * @brief Get the maximum size of a virtqueue
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] size Pointer to store the maximum queue size
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_max_queue_size(struct virtio_device *const dev,
+                                      uint16_t *size) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL || size == NULL) {
@@ -337,26 +341,19 @@ int virtio_mmio_max_queue_size(struct virtio_device *const dev, uint16_t index,
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_mmio_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
   *size = virtio_mmio_read32(mdev, VIRTIO_MMIO_QUEUE_SIZE_MAX);
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_mmio_set_queue_size(struct virtio_device *const dev, uint16_t index,
-                               uint16_t size) {
-  int rc;
+/**
+ * @brief Set the size of a virtqueue
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] size Queue size to set
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_set_queue_size(struct virtio_device *const dev, uint16_t size) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -369,25 +366,20 @@ int virtio_mmio_set_queue_size(struct virtio_device *const dev, uint16_t index,
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_mmio_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
-  }
-
   virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_SIZE, size);
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_mmio_get_interrupt_status(struct virtio_device *const dev,
-                                     uint32_t *status) {
+/**
+ * @brief Get the interrupt status
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] status Pointer to store the interrupt status
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_get_interrupt_status(struct virtio_device *const dev,
+                                            uint32_t *status) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL || status == NULL) {
@@ -405,8 +397,15 @@ int virtio_mmio_get_interrupt_status(struct virtio_device *const dev,
   return EOK;
 }
 
-int virtio_mmio_set_interrupt_ack(struct virtio_device *const dev,
-                                  uint32_t status) {
+/**
+ * @brief Acknowledge interrupts
+ *
+ * @param[in] dev VirtIO device
+ * @param[in] status Interrupt status bits to acknowledge
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_set_interrupt_ack(struct virtio_device *const dev,
+                                         uint32_t status) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -424,9 +423,17 @@ int virtio_mmio_set_interrupt_ack(struct virtio_device *const dev,
   return EOK;
 }
 
-int virtio_mmio_read_device_config(struct virtio_device *const dev, void *dst,
-                                   size_t len, size_t offset) {
-  int rc;
+/**
+ * @brief Read device-specific configuration space
+ *
+ * @param[in] dev VirtIO device
+ * @param[out] dst Destination buffer
+ * @param[in] len Number of bytes to read
+ * @param[in] offset Offset within device configuration space
+ * @return EOK on success, EINVAL if parameters are invalid
+ */
+static int virtio_mmio_read_device_config(struct virtio_device *const dev, void *dst,
+                                          size_t len, size_t offset) {
   struct virtio_mmio_device *mdev;
   size_t words;
 
@@ -444,11 +451,6 @@ int virtio_mmio_read_device_config(struct virtio_device *const dev, void *dst,
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
   words = len / sizeof(uint32_t);
 
   for (size_t word = 0; word < words; word++) {
@@ -456,7 +458,7 @@ int virtio_mmio_read_device_config(struct virtio_device *const dev, void *dst,
         mdev, VIRTIO_MMIO_CONFIG + offset + (word * sizeof(uint32_t)));
   }
 
-  return pthread_spin_unlock(&dev->lock);
+  return EOK;
 }
 
 static int virtio_mmio_virtq_callback(struct virtio_device *dev,
@@ -489,48 +491,32 @@ static int virtio_mmio_virtq_callback(struct virtio_device *dev,
   return rc;
 }
 
-int virtio_mmio_create_queue(struct virtio_device *const dev, struct virtq *vq,
-                             uint16_t index) {
-  uint16_t num;
+/**
+ * @brief Set the physical address of a virtqueue for MMIO device
+ *
+ * Configures the virtqueue physical address in MMIO registers. For legacy
+ * devices, writes the page frame number (PFN) to QUEUE_PFN register. For
+ * modern devices, writes 64-bit addresses for descriptor, available, and
+ * used rings to their respective low/high register pairs.
+ *
+ * @param dev VirtIO MMIO device instance
+ * @param vq Virtual queue to configure
+ * @return EOK on success, error code on failure
+ */
+static int virtio_mmio_set_queue_addr(struct virtio_device *const dev,
+                                      struct virtq *vq) {
   uint64_t paddr;
   uint64_t pfn;
   struct virtio_mmio_device *mdev;
   int rc;
 
-  if (dev == NULL || vq == NULL) {
-    return EINVAL;
-  }
-
   mdev = dev->priv;
 
-  if (mdev == NULL) {
-    return EINVAL;
-  }
-
-  rc = virtq_size(vq, &num);
-  if (rc != EOK) {
+  if ((rc = virtq_desc_paddr(vq, (intptr_t *)&paddr)) != EOK) {
+    log_err("failed to get virtq physical address");
     return rc;
   }
 
-  rc = virtio_mmio_reset_queue(dev, index);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtio_mmio_set_queue_size(dev, index, num);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  rc = virtq_desc_paddr(vq, (intptr_t *)&paddr);
-  if (rc != EOK) {
-    return rc;
-  }
   if (dev->leagcy) {
     pfn = paddr >> 12;
     assert(pfn >> 32 == 0);
@@ -540,39 +526,27 @@ int virtio_mmio_create_queue(struct virtio_device *const dev, struct virtq *vq,
     virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_DESC_LOW, paddr & 0xFFFFFFFF);
     virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_DESC_HIGH, paddr >> 32);
 
-    rc = virtq_avail_paddr(vq, (intptr_t *)&paddr);
-    if (rc != EOK) {
-      goto unlock;
+    if ((rc = virtq_avail_paddr(vq, (intptr_t *)&paddr)) != EOK) {
+      return rc;
     }
     virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_DRIVER_LOW, paddr & 0xFFFFFFFF);
     virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_DRIVER_HIGH, paddr >> 32);
 
-    rc = virtq_used_paddr(vq, (intptr_t *)&paddr);
-    if (rc != EOK) {
-      goto unlock;
+    if ((rc = virtq_used_paddr(vq, (intptr_t *)&paddr)) != EOK) {
+      return rc;
     }
     virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_DEVICE_LOW, paddr & 0xFFFFFFFF);
     virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_DEVICE_HIGH, paddr >> 32);
   }
 
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return EOK;
 }
 
-int virtio_mmio_init(struct virtio_device **dev, uint64_t address,
-                     uint16_t type, int irq) {
+int virtio_mmio_init(struct virtio_device *dev, uint64_t address, uint16_t type,
+                     int irq) {
   struct virtio_mmio_device *mdev;
-  struct virtio_device *vdev;
   void *vaddr;
   int rc;
-
-  rc = virtio_init(dev);
-  if (rc != EOK) {
-    return rc;
-  }
-
-  vdev = *dev;
 
   mdev = calloc(1, sizeof(struct virtio_mmio_device));
   if (mdev == NULL) {
@@ -590,9 +564,9 @@ int virtio_mmio_init(struct virtio_device **dev, uint64_t address,
 
   mdev->vaddr = (uint64_t)vaddr;
   mdev->pagesize = getpagesize();
-  vdev->irq = irq;
+  dev->irq = irq;
 
-  vdev->priv = mdev;
+  dev->priv = mdev;
 
   uint32_t magic = virtio_mmio_read32(mdev, VIRTIO_MMIO_MAGIC_VALUE);
   if (magic != 0x74726976) {
@@ -602,36 +576,36 @@ int virtio_mmio_init(struct virtio_device **dev, uint64_t address,
     goto free_mdev;
   }
 
-  vdev->leagcy = virtio_mmio_read32(mdev, VIRTIO_MMIO_VERSION) ==
-                 VIRTIO_MMIO_VERSION_LEGACY;
-  log_debug("virtio mmio version: %s", vdev->leagcy ? "legacy" : "modern");
+  dev->leagcy = virtio_mmio_read32(mdev, VIRTIO_MMIO_VERSION) ==
+                VIRTIO_MMIO_VERSION_LEGACY;
+  log_debug("virtio mmio version: %s", dev->leagcy ? "legacy" : "modern");
 
   uint32_t device_id = virtio_mmio_read32(mdev, VIRTIO_MMIO_DEVICE_ID);
   if (device_id != type) {
-    log_err("device type mismatch: expected 0x%x, found 0x%x: %s",
-            type, device_id, strerror(ENODEV));
+    log_err("device type mismatch: expected 0x%x, found 0x%x: %s", type,
+            device_id, strerror(ENODEV));
     rc = ENODEV;
     goto free_mdev;
   }
 
-  if (vdev->leagcy) {
+  if (dev->leagcy) {
     virtio_mmio_write32(mdev, VIRTIO_MMIO_GUEST_PAGE_SIZE, mdev->pagesize);
   }
 
-  vdev->ops.read_device_features = virtio_mmio_read_device_features;
-  vdev->ops.write_driver_features = virtio_mmio_write_driver_features;
-  vdev->ops.set_device_status = virtio_mmio_set_device_status;
-  vdev->ops.add_device_status = virtio_mmio_add_device_status;
-  vdev->ops.reset_device = virtio_mmio_reset_device;
-  vdev->ops.get_device_status = virtio_mmio_get_device_status;
-  vdev->ops.read_device_config = virtio_mmio_read_device_config;
-  vdev->ops.create_queue = virtio_mmio_create_queue;
-  vdev->ops.select_queue = virtio_mmio_select_queue;
-  vdev->ops.notify_queue = virtio_mmio_notify_queue;
-  vdev->ops.enable_queue = virtio_mmio_enable_queue;
-  vdev->ops.reset_queue = virtio_mmio_reset_queue;
-  vdev->ops.max_queue_size = virtio_mmio_max_queue_size;
-  vdev->ops.virtq_callback = virtio_mmio_virtq_callback;
+  dev->ops.read_device_features = virtio_mmio_read_device_features;
+  dev->ops.write_driver_features = virtio_mmio_write_driver_features;
+  dev->ops.set_device_status = virtio_mmio_set_device_status;
+  dev->ops.reset_device = virtio_mmio_reset_device;
+  dev->ops.get_device_status = virtio_mmio_get_device_status;
+  dev->ops.read_device_config = virtio_mmio_read_device_config;
+  dev->ops.set_queue_addr = virtio_mmio_set_queue_addr;
+  dev->ops.select_queue = virtio_mmio_select_queue;
+  dev->ops.notify_queue = virtio_mmio_notify_queue;
+  dev->ops.enable_queue = virtio_mmio_enable_queue;
+  dev->ops.reset_queue = virtio_mmio_reset_queue;
+  dev->ops.max_queue_size = virtio_mmio_max_queue_size;
+  dev->ops.set_queue_size = virtio_mmio_set_queue_size;
+  dev->ops.virtq_callback = virtio_mmio_virtq_callback;
 
   log_info("virtio mmio device initialized successfully");
   return EOK;
@@ -639,7 +613,7 @@ int virtio_mmio_init(struct virtio_device **dev, uint64_t address,
 free_mdev:
   free(mdev);
 free_vdev:
-  virtio_destroy(vdev);
+  virtio_destroy(dev);
 
   return rc;
 }

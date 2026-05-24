@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 #include "gpio.h"
+#include "logging.h"
 #include "virtio.h"
 #include "virtio_mmio.h"
 #include "virtio_pci.h"
-#include "logging.h"
 #include <pthread.h>
 #include <semaphore.h>
 #include <stddef.h>
@@ -75,6 +75,13 @@ struct virtio_gpio_device {
   void *priv;
 };
 
+/**
+ * @brief Callback function for GPIO request completion
+ *
+ * @param[in] request GPIO request structure
+ * @param[in] response GPIO response structure
+ * @param[in] context User context data
+ */
 static void
 virtio_gpio_callback(const struct virtio_gpio_request *const request,
                      const struct virtio_gpio_response *const response,
@@ -99,6 +106,12 @@ struct virtio_gpio_context_n {
   uint8_t value[];
 };
 
+/**
+ * @brief Initialize GPIO context for synchronous operations
+ *
+ * @param[out] context GPIO context structure to initialize
+ * @return 0 on success, error code from sem_init() on failure
+ */
 static inline int
 virtio_gpio_context_init(struct virtio_gpio_context *context) {
   context->header.callback = virtio_gpio_callback;
@@ -107,11 +120,23 @@ virtio_gpio_context_init(struct virtio_gpio_context *context) {
   return sem_init(&context->header.sem, 0, 0);
 }
 
+/**
+ * @brief Destroy GPIO context and release resources
+ *
+ * @param[in] context GPIO context structure to destroy
+ * @return 0 on success, error code from sem_destroy() on failure
+ */
 static inline int
 virtio_gpio_context_deinit(struct virtio_gpio_context *context) {
   return sem_destroy(&context->header.sem);
 }
 
+/**
+ * @brief Wait for GPIO operation completion
+ *
+ * @param[in] context GPIO context structure
+ * @return 0 on success, error code on failure
+ */
 static inline int
 virtio_gpio_context_wait(struct virtio_gpio_context *context) {
   int rc;
@@ -148,6 +173,13 @@ virtio_gpio_callback(const struct virtio_gpio_request *const request,
   sem_post(&context_->header.sem);
 }
 
+/**
+ * @brief Calculate response buffer size for a GPIO message type
+ *
+ * @param[in] dev GPIO device structure
+ * @param[in] type GPIO message type
+ * @return Size in bytes required for response buffer
+ */
 static size_t virtio_gpio_response_size(struct virtio_gpio_device *dev,
                                         uint16_t type) {
   switch (type) {
@@ -158,6 +190,13 @@ static size_t virtio_gpio_response_size(struct virtio_gpio_device *dev,
   }
 }
 
+/**
+ * @brief Virtqueue interrupt callback for GPIO device
+ *
+ * @param[in] dev VirtIO device structure
+ * @param[in] vq Virtqueue that triggered the interrupt
+ * @return EOK on success, error code on failure
+ */
 static int virtq_callback(struct virtio_device *dev, struct virtq *vq) {
   int rc;
   uint16_t idxs[2];
@@ -188,6 +227,16 @@ static int virtq_callback(struct virtio_device *dev, struct virtq *vq) {
   return rc;
 }
 
+/**
+ * @brief Send a GPIO request to the device
+ *
+ * @param[in] dev GPIO device structure
+ * @param[in] type GPIO message type
+ * @param[in] gpio GPIO pin number
+ * @param[in] value Value for the request
+ * @param[in] context User context data
+ * @return EOK on success, error code on failure
+ */
 static int virtio_gpio_request(struct virtio_gpio_device *dev, uint16_t type,
                                uint16_t gpio, uint16_t value, void *context) {
   uint16_t idxs[2];
@@ -390,8 +439,13 @@ int virtio_gpio_init(size_t idx, uint64_t mem, uint32_t irq, uint16_t qsize,
 
   pdev->idx = idx;
 
-  rc = mem ? virtio_mmio_init(&vdev, mem, VIRTIO_DT_GPIO, irq)
-           : virtio_pci_init(&vdev, VIRTIO_DT_GPIO, idx, msix_vector_count);
+  rc = virtio_init(&vdev);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = mem ? virtio_mmio_init(vdev, mem, VIRTIO_DT_GPIO, irq)
+           : virtio_pci_init(vdev, VIRTIO_DT_GPIO, idx, msix_vector_count);
   if (rc != EOK) {
     log_err("failed to initialize virtio device: %s", strerror(rc));
     goto free_vdev;

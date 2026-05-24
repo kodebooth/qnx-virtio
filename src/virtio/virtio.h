@@ -81,13 +81,6 @@ struct virtio_ops {
    */
   int (*set_device_status)(struct virtio_device *const dev, uint8_t status);
 
-  /** @brief Add bits to device status (OR operation)
-   * @param dev VirtIO device instance
-   * @param status Status bits to add
-   * @return 0 on success, negative error code on failure
-   */
-  int (*add_device_status)(struct virtio_device *const dev, uint8_t status);
-
   /** @brief Get current device status
    * @param dev VirtIO device instance
    * @param status Output buffer for status value
@@ -111,14 +104,12 @@ struct virtio_ops {
   int (*read_device_config)(struct virtio_device *const dev, void *dst,
                             size_t len, size_t offset);
 
-  /** @brief Create and configure a virtqueue
+  /** @brief Set the physical address of a virtqueue
    * @param dev VirtIO device instance
-   * @param vq Virtqueue structure to initialize
-   * @param index Queue index
+   * @param vq Virtual queue to configure
    * @return 0 on success, negative error code on failure
    */
-  int (*create_queue)(struct virtio_device *const dev, struct virtq *vq,
-                      uint16_t index);
+  int (*set_queue_addr)(struct virtio_device *const dev, struct virtq *vq);
 
   /** @brief Select a queue for subsequent operations
    * @param dev VirtIO device instance
@@ -136,46 +127,30 @@ struct virtio_ops {
 
   /** @brief Enable or disable a queue
    * @param dev VirtIO device instance
-   * @param index Queue index
    * @param enable True to enable, false to disable
    * @return 0 on success, negative error code on failure
    */
-  int (*enable_queue)(struct virtio_device *const dev, uint16_t index,
-                      bool enable);
+  int (*enable_queue)(struct virtio_device *const dev, bool enable);
 
   /** @brief Reset a specific queue
    * @param dev VirtIO device instance
-   * @param index Queue index to reset
    * @return 0 on success, negative error code on failure
    */
-  int (*reset_queue)(struct virtio_device *const dev, uint16_t index);
+  int (*reset_queue)(struct virtio_device *const dev);
 
   /** @brief Get maximum supported queue size
    * @param dev VirtIO device instance
-   * @param index Queue index
    * @param size Output buffer for maximum size
    * @return 0 on success, negative error code on failure
    */
-  int (*max_queue_size)(struct virtio_device *const dev, uint16_t index,
-                        uint16_t *size);
-
-  /** @brief Get current queue size
-   * @param dev VirtIO device instance
-   * @param index Queue index
-   * @param size Output buffer for current size
-   * @return 0 on success, negative error code on failure
-   */
-  int (*get_queue_size)(struct virtio_device *const dev, uint16_t index,
-                        uint16_t *size);
+  int (*max_queue_size)(struct virtio_device *const dev, uint16_t *size);
 
   /** @brief Set queue size
    * @param dev VirtIO device instance
-   * @param index Queue index
    * @param size Desired queue size (must be power of 2)
    * @return 0 on success, negative error code on failure
    */
-  int (*set_queue_size)(struct virtio_device *const dev, uint16_t index,
-                        uint16_t size);
+  int (*set_queue_size)(struct virtio_device *const dev, uint16_t size);
 
   /** @brief Register virtqueue interrupt callback
    * @param dev VirtIO device instance
@@ -259,17 +234,6 @@ static inline int virtio_set_device_status(struct virtio_device *dev,
 }
 
 /**
- * @brief Add bits to device status (OR operation)
- * @param dev VirtIO device instance
- * @param status Status bits to add (VIRTIO_DEVICE_STATUS_* bits)
- * @return 0 on success, negative error code on failure
- */
-static inline int virtio_add_device_status(struct virtio_device *dev,
-                                           uint8_t status) {
-  return dev->ops.add_device_status(dev, status);
-}
-
-/**
  * @brief Get current device status
  * @param dev VirtIO device instance
  * @param status Output buffer for status value
@@ -295,14 +259,6 @@ static inline int virtio_read_device_config(struct virtio_device *dev,
 }
 
 /**
- * @brief Reset the VirtIO device
- *
- * @param dev VirtIO device instance
- * @return 0 on success, negative error code on failure
- */
-int virtio_reset_device(struct virtio_device *dev);
-
-/**
  * @brief Select a queue for subsequent operations
  * @param dev VirtIO device instance
  * @param index Queue index to select
@@ -314,15 +270,39 @@ static inline int virtio_select_queue(struct virtio_device *dev,
 }
 
 /**
+ * @brief Set the physical address of a virtqueue
+ * @param dev VirtIO device instance
+ * @param vq Virtual queue to configure
+ * @return 0 on success, negative error code on failure
+ */
+static inline int virtio_set_queue_addr(struct virtio_device *dev,
+                                        struct virtq *vq) {
+  return dev->ops.set_queue_addr(dev, vq);
+}
+
+/**
+ * @brief Add bits to device status (OR operation)
+ * @param dev VirtIO device instance
+ * @param status Status bits to add (VIRTIO_DEVICE_STATUS_* bits)
+ * @return 0 on success, negative error code on failure
+ */
+int virtio_add_device_status(struct virtio_device *dev, uint8_t status);
+
+/**
+ * @brief Reset the VirtIO device
+ *
+ * @param dev VirtIO device instance
+ * @return 0 on success, negative error code on failure
+ */
+int virtio_reset_device(struct virtio_device *dev);
+
+/**
  * @brief Notify device of available buffers in queue
  * @param dev VirtIO device instance
  * @param index Queue index to notify
  * @return 0 on success, negative error code on failure
  */
-static inline int virtio_notify_queue(struct virtio_device *dev,
-                                      uint16_t index) {
-  return dev->ops.notify_queue(dev, index);
-}
+int virtio_notify_queue(struct virtio_device *dev, uint16_t index);
 
 /**
  * @brief Enable or disable a virtqueue
@@ -331,10 +311,7 @@ static inline int virtio_notify_queue(struct virtio_device *dev,
  * @param enable True to enable, false to disable
  * @return 0 on success, negative error code on failure
  */
-static inline int virtio_enable_queue(struct virtio_device *dev, uint16_t index,
-                                      bool enable) {
-  return dev->ops.enable_queue(dev, index, enable);
-}
+int virtio_enable_queue(struct virtio_device *dev, uint16_t index, bool enable);
 
 /**
  * @brief Reset a specific virtqueue
@@ -345,10 +322,7 @@ static inline int virtio_enable_queue(struct virtio_device *dev, uint16_t index,
  * @param index Queue index to reset
  * @return 0 on success, negative error code on failure
  */
-static inline int virtio_reset_queue(struct virtio_device *dev,
-                                     uint16_t index) {
-  return dev->ops.reset_queue(dev, index);
-}
+int virtio_reset_queue(struct virtio_device *dev, uint16_t index);
 
 /**
  * @brief Get maximum supported queue size
@@ -357,34 +331,19 @@ static inline int virtio_reset_queue(struct virtio_device *dev,
  * @param size Output buffer for maximum size
  * @return 0 on success, negative error code on failure
  */
-static inline int virtio_max_queue_size(struct virtio_device *dev,
-                                        uint16_t index, uint16_t *size) {
-  return dev->ops.max_queue_size(dev, index, size);
-}
-
-/**
- * @brief Get current queue size
- * @param dev VirtIO device instance
- * @param index Queue index
- * @param size Output buffer for current size
- * @return 0 on success, negative error code on failure
- */
-static inline int virtio_get_queue_size(struct virtio_device *dev,
-                                        uint16_t index, uint16_t *size) {
-  return dev->ops.get_queue_size(dev, index, size);
-}
+int virtio_max_queue_size(struct virtio_device *dev, uint16_t index,
+                          uint16_t *size);
 
 /**
  * @brief Set queue size
+ *
  * @param dev VirtIO device instance
  * @param index Queue index
  * @param size Desired queue size (must be power of 2)
  * @return 0 on success, negative error code on failure
  */
-static inline int virtio_set_queue_size(struct virtio_device *dev,
-                                        uint16_t index, uint16_t size) {
-  return dev->ops.set_queue_size(dev, index, size);
-}
+int virtio_set_queue_size(struct virtio_device *dev, uint16_t index,
+                          uint16_t size);
 
 /**
  * @brief Initialize a VirtIO device instance

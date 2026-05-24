@@ -15,6 +15,11 @@ enum {
   VIRTIO_OPT_QSIZE,
 };
 
+/**
+ * @brief Print usage information to stdout
+ *
+ * @param[in] prog Program name (typically argv[0])
+ */
 static void print_usage(const char *prog) {
   printf("Usage: %s [options]\n", prog);
   printf("Options:\n");
@@ -27,6 +32,13 @@ static void print_usage(const char *prog) {
   printf("  -h, --help  Show this help message\n");
 }
 
+/**
+ * @brief Parse VirtIO-specific suboptions
+ *
+ * @param[in] optarg Option argument string containing suboptions
+ * @param[out] args Structure to store parsed arguments
+ * @return 0 on success, -1 on error
+ */
 static int parse_virtio_args(char *optarg, struct virtio_args *args) {
   char *const token[] = {[VIRTIO_OPT_IDX] = "idx",
                          [VIRTIO_OPT_MEM] = "mem",
