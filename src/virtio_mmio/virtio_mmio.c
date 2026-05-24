@@ -118,7 +118,8 @@ static int virtio_mmio_read_device_features(struct virtio_device *const dev,
  * @return EOK on success, EINVAL if parameters are invalid
  */
 static int virtio_mmio_write_driver_features(struct virtio_device *const dev,
-                                             const uint32_t *features, size_t count) {
+                                             const uint32_t *features,
+                                             size_t count) {
   uint32_t select;
   struct virtio_mmio_device *mdev;
 
@@ -146,7 +147,8 @@ static int virtio_mmio_write_driver_features(struct virtio_device *const dev,
  * @param[out] status Pointer to store the device status
  * @return EOK on success, EINVAL if parameters are invalid
  */
-static int virtio_mmio_get_device_status(struct virtio_device *dev, uint8_t *status) {
+static int virtio_mmio_get_device_status(struct virtio_device *dev,
+                                         uint8_t *status) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL || status == NULL) {
@@ -223,7 +225,8 @@ static int virtio_mmio_reset_device(struct virtio_device *const dev) {
  * @param[in] index Queue index to select
  * @return EOK on success, EINVAL if parameters are invalid
  */
-static int virtio_mmio_select_queue(struct virtio_device *const dev, uint16_t index) {
+static int virtio_mmio_select_queue(struct virtio_device *const dev,
+                                    uint16_t index) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -248,7 +251,8 @@ static int virtio_mmio_select_queue(struct virtio_device *const dev, uint16_t in
  * @param[in] index Queue index to notify
  * @return EOK on success, EINVAL if parameters are invalid
  */
-static int virtio_mmio_notify_queue(struct virtio_device *const dev, uint16_t index) {
+static int virtio_mmio_notify_queue(struct virtio_device *const dev,
+                                    uint16_t index) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -273,7 +277,8 @@ static int virtio_mmio_notify_queue(struct virtio_device *const dev, uint16_t in
  * @param[in] enable true to enable, false to disable
  * @return EOK on success, EINVAL if parameters are invalid
  */
-static int virtio_mmio_enable_queue(struct virtio_device *const dev, bool enable) {
+static int virtio_mmio_enable_queue(struct virtio_device *const dev,
+                                    bool enable) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -299,7 +304,7 @@ static int virtio_mmio_enable_queue(struct virtio_device *const dev, bool enable
  * @param[in] dev VirtIO device
  * @return EOK on success, EINVAL if parameters are invalid
  */
-static int virtio_mmio_reset_queue(struct virtio_device *const dev) {
+static int virtio_mmio_set_queue_reset(struct virtio_device *const dev) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -313,9 +318,25 @@ static int virtio_mmio_reset_queue(struct virtio_device *const dev) {
   }
 
   virtio_mmio_write32(mdev, VIRTIO_MMIO_QUEUE_RESET, 1);
-  while (virtio_mmio_read32(mdev, VIRTIO_MMIO_QUEUE_RESET) != 0) {
-    /* wait for reset to complete */
+
+  return EOK;
+}
+
+static int virtio_mmio_get_queue_reset(struct virtio_device *const dev,
+                                       uint32_t *value) {
+  struct virtio_mmio_device *mdev;
+
+  if (dev == NULL || value == NULL) {
+    return EINVAL;
   }
+
+  mdev = dev->priv;
+
+  if (mdev == NULL) {
+    return EINVAL;
+  }
+
+  *value = virtio_mmio_read32(mdev, VIRTIO_MMIO_QUEUE_RESET);
 
   return EOK;
 }
@@ -353,7 +374,8 @@ static int virtio_mmio_max_queue_size(struct virtio_device *const dev,
  * @param[in] size Queue size to set
  * @return EOK on success, EINVAL if parameters are invalid
  */
-static int virtio_mmio_set_queue_size(struct virtio_device *const dev, uint16_t size) {
+static int virtio_mmio_set_queue_size(struct virtio_device *const dev,
+                                      uint16_t size) {
   struct virtio_mmio_device *mdev;
 
   if (dev == NULL) {
@@ -432,8 +454,9 @@ static int virtio_mmio_set_interrupt_ack(struct virtio_device *const dev,
  * @param[in] offset Offset within device configuration space
  * @return EOK on success, EINVAL if parameters are invalid
  */
-static int virtio_mmio_read_device_config(struct virtio_device *const dev, void *dst,
-                                          size_t len, size_t offset) {
+static int virtio_mmio_read_device_config(struct virtio_device *const dev,
+                                          void *dst, size_t len,
+                                          size_t offset) {
   struct virtio_mmio_device *mdev;
   size_t words;
 
@@ -602,7 +625,8 @@ int virtio_mmio_init(struct virtio_device *dev, uint64_t address, uint16_t type,
   dev->ops.select_queue = virtio_mmio_select_queue;
   dev->ops.notify_queue = virtio_mmio_notify_queue;
   dev->ops.enable_queue = virtio_mmio_enable_queue;
-  dev->ops.reset_queue = virtio_mmio_reset_queue;
+  dev->ops.set_queue_reset = virtio_mmio_set_queue_reset;
+  dev->ops.get_queue_reset = virtio_mmio_get_queue_reset;
   dev->ops.max_queue_size = virtio_mmio_max_queue_size;
   dev->ops.set_queue_size = virtio_mmio_set_queue_size;
   dev->ops.virtq_callback = virtio_mmio_virtq_callback;

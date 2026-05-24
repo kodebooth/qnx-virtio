@@ -294,7 +294,7 @@ static int virtio_pci_enable_queue(struct virtio_device *dev, bool enable) {
  * @param[in] dev VirtIO device
  * @return EOK on success, EINVAL if parameters are invalid
  */
-static int virtio_pci_reset_queue(struct virtio_device *dev) {
+static int virtio_pci_set_queue_reset(struct virtio_device *dev) {
   struct virtio_pci_device *pdev;
 
   if (dev == NULL) {
@@ -308,9 +308,25 @@ static int virtio_pci_reset_queue(struct virtio_device *dev) {
   }
 
   pdev->common_cfg->queue_reset = true;
-  while (pdev->common_cfg->queue_reset) {
-    /* wait for reset to complete */
+
+  return EOK;
+}
+
+static int virtio_pci_get_queue_reset(struct virtio_device *dev,
+                                      uint32_t *value) {
+  struct virtio_pci_device *pdev;
+
+  if (dev == NULL || value == NULL) {
+    return EINVAL;
   }
+
+  pdev = dev->priv;
+
+  if (pdev == NULL || pdev->common_cfg == NULL) {
+    return EINVAL;
+  }
+
+  *value = pdev->common_cfg->queue_reset;
 
   return EOK;
 }
@@ -402,7 +418,8 @@ static int virtio_pci_read_device_features(struct virtio_device *dev,
  * @return EOK on success, EINVAL if parameters are invalid
  */
 static int virtio_pci_write_driver_features(struct virtio_device *dev,
-                                            const uint32_t *features, size_t len) {
+                                            const uint32_t *features,
+                                            size_t len) {
   uint32_t select;
   struct virtio_pci_device *pdev;
 
@@ -697,7 +714,8 @@ int virtio_pci_init(struct virtio_device *dev, uint16_t type, size_t index,
   dev->ops.select_queue = virtio_pci_select_queue;
   dev->ops.notify_queue = virtio_pci_notify_queue;
   dev->ops.enable_queue = virtio_pci_enable_queue;
-  dev->ops.reset_queue = virtio_pci_reset_queue;
+  dev->ops.set_queue_reset = virtio_pci_set_queue_reset;
+  dev->ops.get_queue_reset = virtio_pci_get_queue_reset;
   dev->ops.max_queue_size = virtio_pci_queue_size;
   dev->ops.set_queue_size = virtio_pci_set_queue_size;
   dev->ops.virtq_callback = virtio_pci_virtq_callback;

@@ -4,10 +4,12 @@
  */
 #include "virtio.h"
 #include "logging.h"
+#include "unistd.h"
 #include "virtq.h"
 #include <errno.h>
 #include <pthread.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/neutrino.h>
@@ -43,6 +45,55 @@ void *virtio_ist(void *arg) {
 
     virtio_virtq_callback(intr->dev, intr->vq, intr->callback);
   }
+}
+
+static int virtio_set_queue_reset(struct virtio_device *dev, uint16_t index) {
+  int rc;
+
+  if (dev == NULL) {
+    return EINVAL;
+  }
+
+  rc = pthread_spin_lock(&dev->lock);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = virtio_select_queue(dev, index);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+  rc = dev->ops.set_queue_reset(dev);
+
+unlock:
+  pthread_spin_unlock(&dev->lock);
+  return rc;
+}
+
+static int virtio_get_queue_reset(struct virtio_device *dev, uint16_t index,
+                                  uint32_t *queue_reset) {
+  int rc;
+
+  if (dev == NULL || queue_reset == NULL) {
+    return EINVAL;
+  }
+
+  rc = pthread_spin_lock(&dev->lock);
+  if (rc != EOK) {
+    return rc;
+  }
+
+  rc = virtio_select_queue(dev, index);
+  if (rc != EOK) {
+    goto unlock;
+  }
+
+  rc = dev->ops.get_queue_reset(dev, queue_reset);
+
+unlock:
+  pthread_spin_unlock(&dev->lock);
+  return rc;
 }
 
 int virtio_reset_device(struct virtio_device *dev) {
@@ -157,26 +208,35 @@ unlock:
 
 int virtio_reset_queue(struct virtio_device *dev, uint16_t index) {
   int rc;
+  unsigned int remaining_timeout_ms;
+  unsigned int remaining_poll_interval_ms;
+  uint32_t queue_reset;
 
   if (dev == NULL) {
     return EINVAL;
   }
 
-  rc = pthread_spin_lock(&dev->lock);
-  if (rc != EOK) {
+  remaining_timeout_ms = dev->queue_reset_timeout_ms;
+
+  if ((rc = virtio_set_queue_reset(dev, index)) != EOK) {
     return rc;
   }
 
-  rc = virtio_select_queue(dev, index);
-  if (rc != EOK) {
-    goto unlock;
+  while (queue_reset != 0 && remaining_timeout_ms > 0) {
+    remaining_poll_interval_ms = dev->device_reset_poll_interval_ms;
+    while (remaining_poll_interval_ms > 0) {
+      remaining_poll_interval_ms = delay(remaining_poll_interval_ms);
+    }
+
+    remaining_timeout_ms -=
+        min(remaining_timeout_ms, dev->queue_reset_poll_interval_ms);
+
+    if ((rc = virtio_get_queue_reset(dev, index, &queue_reset)) != EOK) {
+      return rc;
+    }
   }
 
-  rc = dev->ops.reset_queue(dev);
-
-unlock:
-  pthread_spin_unlock(&dev->lock);
-  return rc;
+  return queue_reset == 0 ? EOK : ETIMEDOUT;
 }
 
 int virtio_max_queue_size(struct virtio_device *dev, uint16_t index,
@@ -314,6 +374,10 @@ int virtio_init(struct virtio_device **dev) {
   vdev->device_reset_timeout_ms = VIRTIO_CONFIG_DEVICE_RESET_TIMEOUT_MS;
   vdev->device_reset_poll_interval_ms =
       VIRTIO_CONFIG_DEVICE_RESET_POLL_INTERVAL_MS;
+
+  vdev->queue_reset_timeout_ms = VIRTIO_CONFIG_QUEUE_RESET_TIMEOUT_MS;
+  vdev->queue_reset_poll_interval_ms =
+      VIRTIO_CONFIG_QUEUE_RESET_POLL_INTERVAL_MS;
 
   *dev = vdev;
   return rc;

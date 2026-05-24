@@ -46,6 +46,12 @@
 /** @brief default device reset poll interval */
 #define VIRTIO_CONFIG_DEVICE_RESET_POLL_INTERVAL_MS 10U
 
+/** @brief default queu reset timeout */
+#define VIRTIO_CONFIG_QUEUE_RESET_TIMEOUT_MS 500U
+
+/** @brief default queue reset poll interval */
+#define VIRTIO_CONFIG_QUEUE_RESET_POLL_INTERVAL_MS 10U
+
 /** @brief Forward declaration of VirtIO device structure */
 struct virtio_device;
 
@@ -132,11 +138,18 @@ struct virtio_ops {
    */
   int (*enable_queue)(struct virtio_device *const dev, bool enable);
 
-  /** @brief Reset a specific queue
+  /** @brief Start a queue reset
    * @param dev VirtIO device instance
    * @return 0 on success, negative error code on failure
    */
-  int (*reset_queue)(struct virtio_device *const dev);
+  int (*set_queue_reset)(struct virtio_device *const dev);
+
+  /** @brief Get queue reset status
+   * @param dev VirtIO device instance
+   * @param value queue reset status
+   * @return 0 on success, negative error code on failure
+   */
+  int (*get_queue_reset)(struct virtio_device *const dev, uint32_t *value);
 
   /** @brief Get maximum supported queue size
    * @param dev VirtIO device instance
@@ -188,6 +201,16 @@ struct virtio_device {
    * a reset was successful.
    */
   unsigned int device_reset_poll_interval_ms;
+
+  /** @brief queue reset timeout */
+  unsigned int queue_reset_timeout_ms;
+
+  /** @brief queue reset poll interval
+   *
+   * This is the interval at which the queue status is polled to determine if
+   * a reset was successful.
+   */
+  unsigned int queue_reset_poll_interval_ms;
 
   /** @brief Interrupt number */
   int irq;
