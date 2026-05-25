@@ -5,6 +5,8 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 project(qnx-virtio LANGUAGES C CXX)
 
+set(QNX_LIBGPIOD_VERSION "v2.2.4-1")
+
 add_subdirectory(src/gpio)
 add_subdirectory(images)
 add_subdirectory(utils)

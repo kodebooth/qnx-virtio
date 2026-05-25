@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Abe Kohandel
 # SPDX-License-Identifier: MIT
 
+include(FetchContent)
+
 # Determine architecture from CMAKE_SYSTEM_PROCESSOR
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64le")
   set(ARCH "aarch64le")
@@ -16,6 +18,17 @@ else()
   set(QEMU_GPIO_DEVICE "vhost-user-gpio-pci,chardev=vgpio,id=gpio")
 endif()
 
+FetchContent_Declare(
+  qnx-libgpiod
+  URL https://github.com/kodebooth/qnx-libgpiod/releases/download/${QNX_LIBGPIOD_VERSION}/nto${ARCH}-libgpiod.tar.gz
+  DOWNLOAD_EXTRACT_TIMESTAMP true
+  SOURCE_DIR ${CMAKE_BINARY_DIR}/qnx-libgpiod/${ARCH}
+)
+
+FetchContent_MakeAvailable(
+  qnx-libgpiod
+)
+
 add_custom_command(
   OUTPUT
     ifs.img
@@ -23,7 +36,7 @@ add_custom_command(
     ifs_${ARCH}.build
     dev-virtio-gpio
   COMMAND
-    mkifs -vvv -o "${CMAKE_BINARY_DIR}" -r "${CMAKE_BINARY_DIR}/.." ${CMAKE_CURRENT_LIST_DIR}/ifs_${ARCH}.build ${CMAKE_BINARY_DIR}/ifs.img
+    mkifs -vvv -o "${CMAKE_BINARY_DIR}" -r "${CMAKE_BINARY_DIR}/.." -r "${CMAKE_BINARY_DIR}/qnx-libgpiod" ${CMAKE_CURRENT_LIST_DIR}/ifs_${ARCH}.build ${CMAKE_BINARY_DIR}/ifs.img
 )
 
 add_custom_target(
