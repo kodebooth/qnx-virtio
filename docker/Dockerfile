@@ -61,15 +61,6 @@ RUN mkdir /build/qemu && \
     make -j$(nproc) && \
     make DESTDIR=/install/qemu install
 
-# libgpiod
-RUN mkdir /build/libgpiod && \
-    cd /build/libgpiod && \
-    git clone --depth=1 https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git && \
-    cd libgpiod && \
-    meson setup --prefix=/usr/local build -Dtools=disabled -Dtests=disabled && \
-    meson compile --verbose -C build && \
-    DESTDIR=/install/libgpiod meson install -C build
-
 #### qnx-sdp image
 
 FROM ghcr.io/kodebooth/qnx-sdp:latest AS qnx-sdp
@@ -104,6 +95,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
   libevent-2.1-7t64 \
   libfdt1 \
   libglib2.0-0t64 \
+  libgpiod-dev\
   libncurses6 \
   make \
   ninja-build \
@@ -159,6 +151,3 @@ ENV PATH="/opt/node-v${NODE_VERSION}-linux-x64/bin:${PATH}"
 
 COPY --from=builder /install/qemu/${QEMU_INSTALL_DIR} ${QEMU_INSTALL_DIR}
 ENV PATH="${QEMU_INSTALL_DIR}/bin:${PATH}"
-
-COPY --from=builder /install/libgpiod /
-RUN ldconfig
