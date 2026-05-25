@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Abe Kohandel
 # SPDX-License-Identifier: MIT
 
-ARG VARIANT="noble"
+ARG VARIANT="resolute"
 # tmux
 ARG TMUX_VERSION="3.6a"
 # neovim
@@ -31,11 +31,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   autoconf-archive \
   automake \
   build-essential \
+  catch2 \
   git \
   libfdt-dev \
   libglib2.0-dev \
   libtool \
   make \
+  meson \
   ninja-build \
   pkg-config \
   python3 \
@@ -64,9 +66,13 @@ RUN mkdir /build/libgpiod && \
     cd /build/libgpiod && \
     git clone --depth=1 https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git && \
     cd libgpiod && \
-    ./autogen.sh --enable-tools=yes --prefix=/usr/local && \
-    make && \
-    make DESTDIR=/install/libgpiod install
+    meson setup --prefix=/usr/local build -Dtools=disabled -Dtests=disabled && \
+    meson compile --verbose -C build && \
+    DESTDIR=/install/libgpiod meson install -C build
+
+#### qnx-sdp image
+
+FROM ghcr.io/kodebooth/qnx-sdp:latest AS qnx-sdp
 
 #### runtime image
 
@@ -126,21 +132,7 @@ RUN curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSIO
 ENV PATH="/opt/nvim-linux-x86_64/bin:${PATH}"
 
 # qnx sdp
-COPY scripts/qnx_sdp.sh /tmp/qnx_sdp.sh
-RUN --mount=type=secret,id=aws_access_key_id \
-    --mount=type=secret,id=aws_secret_access_key \
-    --mount=type=secret,id=aws_session_token \
-    --mount=type=secret,id=aws_region \
-    chmod +x /tmp/qnx_sdp.sh && \
-    export AWS_ACCESS_KEY_ID=$(cat /run/secrets/aws_access_key_id) && \
-    export AWS_SECRET_ACCESS_KEY=$(cat /run/secrets/aws_secret_access_key) && \
-    export AWS_SESSION_TOKEN=$(cat /run/secrets/aws_session_token 2>/dev/null || echo "") && \
-    export AWS_DEFAULT_REGION=$(cat /run/secrets/aws_region 2>/dev/null || echo "us-east-1") && \
-    export QNX_SDP_INSTALL_DIR=${QNX_SDP_INSTALL_DIR} && \
-    /tmp/qnx_sdp.sh && \
-    rm /tmp/qnx_sdp.sh
-COPY scripts/qcc_wrapper.sh ${QNX_SDP_INSTALL_DIR}/qcc_wrapper.sh
-RUN chmod +x ${QNX_SDP_INSTALL_DIR}/qcc_wrapper.sh
+COPY --from=qnx-sdp ${QNX_SDP_INSTALL_DIR} ${QNX_SDP_INSTALL_DIR}
 ENV QNX_SDP_INSTALL_DIR="${QNX_SDP_INSTALL_DIR}"
 ENV QNX_CONFIGURATION_EXCLUSIVE=${QNX_SDP_INSTALL_DIR}
 

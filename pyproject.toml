@@ -1,10 +1,8 @@
 [tool.pytest]
-minversion = "9.0"
 addopts = ["-ra", "-q"]
-
-[tool.pytest.ini_options]
-pythonpath = ["."]
+minversion = "9.0"
 norecursedirs = ["third_party"]
+pythonpath = ["."]
 
 log_cli = true
 log_cli_level = "INFO"
