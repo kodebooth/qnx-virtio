@@ -25,6 +25,15 @@
 struct virtio_gpio_device;
 
 /**
+ * @brief Get the GPIO chip index
+ *
+ * @param dev VirtIO GPIO device instance
+ * @param value Output buffer to receive index
+ * @return 0 on success, negative error code on failure
+ */
+int virtio_gpio_get_chip_index(struct virtio_gpio_device *dev, size_t *index);
+
+/**
  * @brief Get the number of GPIO pins
  *
  * Queries the VirtIO GPIO device to determine how many GPIO pins are

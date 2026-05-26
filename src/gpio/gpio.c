@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 #include "gpio.h"
+#include "errno.h"
 #include "logging.h"
 #include "virtio.h"
 #include "virtio_mmio.h"
@@ -276,6 +277,16 @@ free_desc1:
 free_desc0:
   virtq_free_desc(dev->requestq, idxs[0]);
   return rc;
+}
+
+int virtio_gpio_get_chip_index(struct virtio_gpio_device *dev, size_t *index) {
+  if (dev == NULL || index == NULL) {
+    return EINVAL;
+  }
+
+  *index = dev->idx;
+
+  return EOK;
 }
 
 int virtio_gpio_num_gpios(struct virtio_gpio_device *dev, uint16_t *ngpio) {

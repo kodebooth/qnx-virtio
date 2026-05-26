@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "uapi/gpio.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 
 struct gpio_iofunc_attr;
 #define IOFUNC_ATTR_T struct gpio_iofunc_attr
@@ -25,15 +27,15 @@ struct gpio_iofunc_attr;
 
 #include "errno.h"
 #include "gpio.h"
-#include "resmgr.h"
 #include "logging.h"
+#include "resmgr.h"
 
 struct gpio_iofunc_attr {
   /* must be the first field */
   iofunc_attr_t attr;
 
   struct virtio_gpio_device *dev;
-  uint16_t index;
+  size_t index;
   uint8_t value;
 };
 
@@ -127,6 +129,61 @@ static int resmgr_read(resmgr_context_t *ctp, io_read_t *msg,
   return _RESMGR_NPARTS(nparts);
 }
 
+static int resmgr_devctl(resmgr_context_t *ctp, io_devctl_t *msg,
+                         RESMGR_OCB_T *ocb) {
+  int status;
+  int nbytes;
+  uint16_t lines;
+
+  if ((status = iofunc_devctl_default(ctp, msg, ocb)) != _RESMGR_DEFAULT) {
+    return status;
+  }
+
+  switch (msg->i.dcmd) {
+  case GPIO_GET_CHIPINFO_IOCTL: {
+    struct gpiochip_info *info = _IO_OUTPUT_PAYLOAD(msg);
+    size_t index;
+
+    if ((status = virtio_gpio_num_gpios(ocb->attr->dev, &lines)) != EOK) {
+      return status;
+    }
+
+    if ((status = virtio_gpio_get_chip_index(ocb->attr->dev, &index)) != EOK) {
+      return status;
+    }
+
+    snprintf(info->name, GPIO_MAX_NAME_SIZE, "gpiochip%zu", index);
+    strcpy(info->label, "virtio");
+    info->lines = lines;
+
+    nbytes = sizeof(struct gpiochip_info);
+  } break;
+
+  case GPIO_GET_LINEINFO_UNWATCH_IOCTL:
+  case GPIO_V2_GET_LINEINFO_IOCTL:
+  case GPIO_V2_GET_LINEINFO_WATCH_IOCTL:
+  case GPIO_V2_GET_LINE_IOCTL:
+  case GPIO_V2_LINE_SET_CONFIG_IOCTL:
+  case GPIO_V2_LINE_GET_VALUES_IOCTL:
+  case GPIO_V2_LINE_SET_VALUES_IOCTL:
+  case GPIO_GET_LINEINFO_IOCTL:
+  case GPIO_GET_LINEHANDLE_IOCTL:
+  case GPIO_GET_LINEEVENT_IOCTL:
+  case GPIOHANDLE_GET_LINE_VALUES_IOCTL:
+  case GPIOHANDLE_SET_LINE_VALUES_IOCTL:
+  case GPIOHANDLE_SET_CONFIG_IOCTL:
+  case GPIO_GET_LINEINFO_WATCH_IOCTL:
+    return ENOTSUP;
+  default:
+    return ENOSYS;
+  }
+
+  memset(&msg->o, 0, sizeof(msg->o));
+  msg->o.ret_val = status;
+
+  return (_RESMGR_PTR(ctp, &msg->o, sizeof(msg->o) + nbytes));
+}
+
 int resmgr_run(struct virtio_gpio_device *dev, uint16_t index) {
   dispatch_t *dpp;
   struct gpio_iofunc_attr *attrs;
@@ -164,14 +221,14 @@ int resmgr_run(struct virtio_gpio_device *dev, uint16_t index) {
   resmgr->resmgr_attr.nparts_max = 1;
   resmgr->resmgr_attr.msg_max_size = 2048;
 
-  attrs = calloc(ngpio, sizeof(struct gpio_iofunc_attr));
+  attrs = calloc(ngpio + 1, sizeof(struct gpio_iofunc_attr));
   if (attrs == NULL) {
     log_err("failed to allocate gpio attributes: %s", strerror(errno));
     rc = errno;
     goto free_resmgr;
   }
 
-  ids = calloc(ngpio, sizeof(int));
+  ids = calloc(ngpio + 1, sizeof(int));
   if (ids == NULL) {
     log_err("failed to allocate resource ids: %s", strerror(errno));
     rc = errno;
@@ -184,6 +241,21 @@ int resmgr_run(struct virtio_gpio_device *dev, uint16_t index) {
 
   resmgr->io_funcs.write = resmgr_write;
   resmgr->io_funcs.read = resmgr_read;
+  resmgr->io_funcs.devctl = resmgr_devctl;
+
+  iofunc_attr_init(&attrs[ngpio].attr, S_IFCHR | 0666, 0, 0);
+  attrs[ngpio].dev = dev;
+  attrs[ngpio].index = -1;
+  attrs[ngpio].attr.nbytes = 0;
+  snprintf(path, sizeof(path), "/dev/gpiochip%u", index);
+  ids[ngpio] =
+      resmgr_attach(dpp, &resmgr->resmgr_attr, path, _FTYPE_ANY, 0,
+                    &resmgr->connect_funcs, &resmgr->io_funcs, &attrs[ngpio]);
+  if (ids[ngpio] == -1) {
+    log_err("failed to attach %s: %s", path, strerror(errno));
+    rc = errno;
+    goto detach;
+  }
 
   for (uint16_t n = 0; n < ngpio; n++) {
     iofunc_attr_init(&attrs[n].attr, S_IFCHR | 0666, 0, 0);
