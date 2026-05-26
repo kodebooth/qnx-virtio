@@ -159,8 +159,43 @@ static int resmgr_devctl(resmgr_context_t *ctp, io_devctl_t *msg,
     nbytes = sizeof(struct gpiochip_info);
   } break;
 
+  case GPIO_V2_GET_LINEINFO_IOCTL: {
+    uint16_t lines;
+    struct gpio_v2_line_info *info = _IO_INPUT_PAYLOAD(msg);
+    uint32_t offset = info->offset;
+    size_t index;
+    uint8_t direction;
+
+    if ((status = virtio_gpio_num_gpios(ocb->attr->dev, &lines)) != EOK) {
+      return status;
+    }
+
+    if ((status = virtio_gpio_get_chip_index(ocb->attr->dev, &index)) != EOK) {
+      return status;
+    }
+
+    if (offset >= lines) {
+      return ENOENT;
+    }
+
+    info = _IO_OUTPUT_PAYLOAD(msg);
+
+    memset(info, 0, sizeof(struct gpio_v2_line_info));
+
+    info->offset = offset;
+    snprintf(info->name, GPIO_MAX_NAME_SIZE, "gpio%zu.%u", index, offset);
+
+    if ((status = virtio_gpio_get_direction(ocb->attr->dev, offset,
+                                            &direction)) != EOK) {
+      return status;
+    }
+
+    info->flags |=
+        direction == 0 ? GPIO_V2_LINE_FLAG_INPUT : GPIO_V2_LINE_FLAG_OUTPUT;
+
+    nbytes = sizeof(struct gpio_v2_line_info);
+  } break;
   case GPIO_GET_LINEINFO_UNWATCH_IOCTL:
-  case GPIO_V2_GET_LINEINFO_IOCTL:
   case GPIO_V2_GET_LINEINFO_WATCH_IOCTL:
   case GPIO_V2_GET_LINE_IOCTL:
   case GPIO_V2_LINE_SET_CONFIG_IOCTL:
